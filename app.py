@@ -7,6 +7,38 @@ from datetime import datetime
 # Configuración de Página
 st.set_page_config(page_title="Astor - Rol de Pagos", layout="wide", page_icon="💸")
 
+# --- ESTILOS PERSONALIZADOS ---
+st.markdown("""
+<style>
+    /* Barra lateral */
+    [data-testid="stSidebar"] {
+        background-color: #050505 !important;
+    }
+    
+    /* Inputs y dropdowns */
+    .stTextInput>div>div>input,
+    .stSelectbox>div>div>div {
+        background-color: #13161C !important;
+        color: #FEFFFF !important;
+        border: 1px solid #6BA4A422 !important;
+    }
+    
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background-color: #052429 !important;
+        border-color: #6BA4A422 !important;
+    }
+    .streamlit-expanderContent {
+        border-color: #6BA4A422 !important;
+    }
+    
+    /* Títulos principal oro (GOLD_COLOR) */
+    h1, h2, h3, h4, h5, h6 {
+        color: #DFBF72 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # --- PARAMETROS DE NEGOCIO ---
 CUENTAS = [
     "Juan Ricardo Cevallos Garratachea (Santander)",
