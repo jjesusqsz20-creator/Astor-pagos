@@ -87,6 +87,7 @@ except Exception as e:
     st.stop()
 
 # --- FUNCIONES DE ACCESO A DATOS ---
+@st.cache_data(ttl=600)  # Mantiene los datos en memoria para cargar la página al instante
 def obtener_datos():
     """Descarga los datos actuales desde Google Sheets"""
     data = sheet.get_all_records()
@@ -98,6 +99,7 @@ def obtener_datos():
 def borrar_pago(indice):
     """Elimina una fila específica de Google Sheets apuntando al índice real."""
     sheet.delete_rows(indice)
+    obtener_datos.clear()  # Instruimos vaciar la memoria para descargar los datos actualizados
 
 def registrar_pago(cuenta, proveedor, monto):
     """Guarda un nuevo pago como una nueva fila en Google Sheets"""
@@ -108,6 +110,7 @@ def registrar_pago(cuenta, proveedor, monto):
     
     # Agregar la nueva fila con el registro del abono
     sheet.append_row([fecha_actual, cuenta, proveedor, monto])
+    obtener_datos.clear()  # Instruimos vaciar la memoria para descargar los datos actualizados
 
 # --- INTERFAZ GRAFICA (UI) ---
 
