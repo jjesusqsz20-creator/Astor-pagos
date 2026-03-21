@@ -187,11 +187,4 @@ else:
         # Botón de basura con popover (pequeño cuadro flotante confirmando)
         with c5.popover("🗑️"):
             st.markdown("¿**Confirmas** borrar el abono?")
-            if st.button("Eliminar", key=f"del_{idx_sheet}", type="primary", use_container_width=True):
-                with st.spinner("Borrando..."):
-                    try:
-                        borrar_pago(idx_sheet)
-                        st.success("✅ Eliminado!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+            st.button("Eliminar", key=f"del_{idx_sheet}", type="primary", use_container_width=True, on_click=borrar_pago, args=(idx_sheet,))
