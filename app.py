@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
 import re
+import requests
 
 # Configuración de Página
 st.set_page_config(page_title="Inside - Rol de Pagos", layout="wide", page_icon="💸")
@@ -102,8 +103,70 @@ st.markdown("""
         background: transparent !important;
         border: none !important;
     }
+    /* --- ESTILOS EXCLUSIVOS PARA LOS HISTORIALES (VERDE PASTEL Y CENTRADO) --- */
+    /* Solo aplicamos esto si el expander sigue a uno de nuestros marcadores específicos */
+    div:has(> .element-container #historial-abonos) ~ div [data-testid="stExpanderHeader"],
+    div:has(> .element-container #historial-abonos) ~ div .stExpander header,
+    div:has(> .element-container #historial-abonos) ~ div summary,
+    div:has(> .element-container #historial-retornos) ~ div [data-testid="stExpanderHeader"],
+    div:has(> .element-container #historial-retornos) ~ div .stExpander header,
+    div:has(> .element-container #historial-retornos) ~ div summary {
+        background-color: #d1fae5 !important;
+        border-radius: 10px !important;
+        border: 1px solid #6ee7b7 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    /* Centrado del texto solo para los historiales */
+    div:has(> .element-container #historial-abonos) ~ div [data-testid="stExpanderHeader"] > div,
+    div:has(> .element-container #historial-retornos) ~ div [data-testid="stExpanderHeader"] > div {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    div:has(> .element-container #historial-abonos) ~ div p,
+    div:has(> .element-container #historial-retornos) ~ div p {
+        text-align: center !important;
+        width: 100% !important;
+        color: #065f46 !important;
+        font-weight: 800 !important;
+        font-size: 1.05rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# --- ESTILOS DE TABLAS HTML PERSONALIZADAS ---
+def generar_tabla_html(df, headers=None, bg_header="#f3f4f6", text_color="#1f2937"):
+    """Genera una tabla HTML premium con contenido centrado y diseño moderno."""
+    if df.empty: return "<p style='text-align:center;'>No hay datos disponibles.</p>"
+    
+    cols = headers if headers else df.columns
+    html = f"""
+    <div style="overflow-x:auto; border-radius:12px; border: 1px solid #e5e7eb; margin: 10px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <table style="width:100%; border-collapse: collapse; font-family: sans-serif; font-size: 0.95rem;">
+            <thead>
+                <tr style="background-color: {bg_header}; border-bottom: 2px solid #e5e7eb;">
+                    {"".join([f'<th style="padding: 12px 15px; text-align: center; color: #4b5563; font-weight: 700; text-transform: uppercase; font-size: 0.75rem;">{c}</th>' for c in cols])}
+                </tr>
+            </thead>
+            <tbody>
+    """
+    for _, row in df.iterrows():
+        html += '<tr style="border-bottom: 1px solid #f3f4f6; transition: background-color 0.2s; cursor: default;" onmouseover="this.style.backgroundColor=\'#f9fafb\'" onmouseout="this.style.backgroundColor=\'transparent\'">'
+        for col in df.columns:
+            val = row[col]
+            html += f'<td style="padding: 12px 15px; text-align: center; color: {text_color};">{val}</td>'
+        html += '</tr>'
+    
+    html += """
+            </tbody>
+        </table>
+    </div>
+    """
+    return html
 
 # --- LÓGICA DE USUARIOS (DB) ---
 @st.cache_data(ttl=1)
@@ -124,8 +187,8 @@ def obtener_usuarios_db(_client):
                 "email": r.get("Email", ""),
                 "tel": r.get("Telefono", ""),
                 "pass": str(r.get("Password", "")),
-                # El rol debe ser lo que diga la BD, o "Editor" si está vacío/no existe
-                "rol": (r.get("Rol") or r.get("rol") or r.get("ROL") or "Editor").strip()
+                # El rol debe ser lo que diga la BD, o "Administrador" si está vacío/no existe
+                "rol": (r.get("Rol") or r.get("rol") or r.get("ROL") or "Administrador").strip()
             } for r in records
         ]
     except:
@@ -140,6 +203,87 @@ def registrar_usuario_db(client, nuevo_user):
         return True
     except:
         return False
+
+# --- WHATSAPP NOTIFICACIONES ---
+def formatear_telefono(tel):
+    """Limpia y asegura el formato E.164 (52 + 10 dígitos) para México"""
+    tel_limpio = "".join(filter(str.isdigit, str(tel)))
+    if len(tel_limpio) == 10:
+        return "52" + tel_limpio
+    return tel_limpio
+
+def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
+    """
+    Envía notificaciones a los editores según la lógica:
+    - Factura -> Notifica a todos los Editores.
+    - Editor X -> Notifica al otro Editor.
+    """
+    if "usuario_logueado" not in st.session_state or not st.session_state.usuario_logueado:
+        return
+
+    user_actual = st.session_state.usuario_logueado
+    rol_actual = user_actual.get("rol", "Administrador")
+    email_actual = user_actual.get("email", "").lower().strip()
+    nombre_actual = user_actual.get("nombre", "Usuario")
+
+    # Obtener todos los administradores
+    todos_usuarios = obtener_usuarios_db(client)
+    editores = [u for u in todos_usuarios if u.get("rol") == "Administrador"]
+
+    # Filtrar destinatarios
+    destinatarios = []
+    if rol_actual == "Colaborador":
+        destinatarios = editores
+    else:
+        # Es un Administrador, notificar a los otros administradores
+        destinatarios = [u for u in editores if u.get("email", "").lower().strip() != email_actual]
+
+    if not destinatarios:
+        return
+
+    # Credenciales de Meta (desde secretos)
+    try:
+        token = st.secrets["whatsapp"]["token"]
+        phone_id = st.secrets["whatsapp"]["phone_id"]
+        template = st.secrets["whatsapp"]["template_name"]
+    except:
+        # Fail silently if config is missing to avoid stopping the app
+        return
+
+    url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    for dest in destinatarios:
+        tel = formatear_telefono(dest.get("tel", ""))
+        if not tel: continue
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": tel,
+            "type": "template",
+            "template": {
+                "name": template,
+                "language": {"code": "es"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": dest.get("nombre", "Administrador")}, # {{1}}
+                            {"type": "text", "text": str(ticket)},                 # {{2}}
+                            {"type": "text", "text": f"{float(monto):,.2f}"},       # {{3}}
+                            {"type": "text", "text": nombre_actual}                # {{4}}
+                        ]
+                    }
+                ]
+            }
+        }
+        try:
+            requests.post(url, headers=headers, json=payload, timeout=5)
+        except:
+            pass
 
 # --- CONFIGURACIÓN DE ESTADO ---
 if "usuario_logueado" not in st.session_state:
@@ -236,9 +380,17 @@ def get_db_sheets(_client):
         sheet_audit = spreadsheet.add_worksheet(title="Auditoria", rows="100", cols="7")
         sheet_audit.append_row(["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"])
 
+    # 6. Hoja de Configuración de Ingresos
+    if "Config_Ingresos" in hojas_nombres:
+        sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos")
+    else:
+        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos", rows="100", cols="3")
+        sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso"])
+
     return {
         "spreadsheet": spreadsheet,
         "config": sheet_config,
+        "config_ingresos": sheet_config_ingresos,
         "retorno": sheet_retorno,
         "retorno_manual": sheet_retorno_manual,
         "abonos": sheet_abonos,
@@ -254,6 +406,7 @@ try:
     # Referencias globales para conveniencia (aunque los datos se obtengan via funciones)
     spreadsheet = db_sheets["spreadsheet"]
     sheet_config = db_sheets["config"]
+    sheet_config_ingresos = db_sheets["config_ingresos"]
     sheet_retorno = db_sheets["retorno"]
     sheet_retorno_manual = db_sheets["retorno_manual"]
     sheet_audit = db_sheets["audit"]
@@ -293,22 +446,22 @@ try:
                 st.markdown('<div style="font-size: 3.5rem; text-align: center; margin-bottom: 0px;">🆕</div>', unsafe_allow_html=True)
                 st.markdown('<h1 style="text-align: center; color: #1E3A8A; font-weight: 800; margin-top: 0px;">Crear Cuenta</h1>', unsafe_allow_html=True)
                 
-                editores_actuales = [u for u in usuarios_db if u.get("rol") == "Editor"]
-                facturas_actuales = [u for u in usuarios_db if u.get("rol") == "Factura"]
+                editores_actuales = [u for u in usuarios_db if u.get("rol") == "Administrador"]
+                facturas_actuales = [u for u in usuarios_db if u.get("rol") == "Colaborador"]
                 
                 can_add_editor = len(editores_actuales) < 2
                 can_add_factura = len(facturas_actuales) < 1
                 
                 if not can_add_editor and not can_add_factura:
-                    st.error("🚫 Límite global de usuarios alcanzado (Máximo 2 Editores y 1 Factura).")
+                    st.error("🚫 Límite global de usuarios alcanzado (Máximo 2 Administradores y 1 Colaborador).")
                     if st.button("⬅️ Volver", use_container_width=True):
                         st.session_state.vista_auth = "login"; st.rerun()
                 else:
                     roles_disponibles = []
-                    if can_add_editor: roles_disponibles.append("Editor")
-                    if can_add_factura: roles_disponibles.append("Factura")
+                    if can_add_editor: roles_disponibles.append("Administrador")
+                    if can_add_factura: roles_disponibles.append("Colaborador")
                     
-                    st.info(f"💡 Disponibilidad: {len(editores_actuales)}/2 Editores, {len(facturas_actuales)}/1 Factura.")
+                    st.info(f"💡 Disponibilidad: {len(editores_actuales)}/2 Administradores, {len(facturas_actuales)}/1 Colaborador.")
                     
                     rol_r = st.selectbox("Selecciona tu Rol", roles_disponibles)
                     n_r = st.text_input("Nombre Completo")
@@ -366,6 +519,34 @@ def guardar_config_db(df_prov):
         return True
     except Exception as e:
         return False
+
+@st.cache_data(ttl=1)
+def obtener_todos_ingresos_periodo():
+    try:
+        data = sheet_config_ingresos.get_all_records()
+        return pd.DataFrame(data)
+    except: return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
+
+def obtener_ingreso_periodo(mes, anio):
+    df = obtener_todos_ingresos_periodo()
+    if df.empty: return 2200000.0
+    res = df[(df["Mes"] == mes) & (df["Año"].astype(str) == str(anio))]
+    if not res.empty:
+        return float(res.iloc[0]["Ingreso"])
+    return 2200000.0
+
+def guardar_ingreso_periodo(mes, anio, monto):
+    try:
+        df = obtener_todos_ingresos_periodo()
+        idx = df[(df["Mes"] == mes) & (df["Año"].astype(str) == str(anio))].index
+        if not idx.empty:
+            row_idx = idx[0] + 2 # +2 por encabezado y 1-based
+            sheet_config_ingresos.update(f"C{row_idx}", [[monto]])
+        else:
+            sheet_config_ingresos.append_row([mes, str(anio), monto])
+        obtener_todos_ingresos_periodo.clear()
+        return True
+    except: return False
 
 def obtener_datos_resiliente(_sheet_obj, expected_cols):
     try:
@@ -481,12 +662,27 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
 @st.cache_data(ttl=1)
 def obtener_datos_retorno():
     """Descarga los datos de retornos desde la hoja 'Retorno'"""
-    # Admitir tanto el nombre antiguo como el nuevo en la carga
+    # Admitir tanto el nombre de la hoja como el estandarizado
     df = obtener_datos_resiliente(sheet_retorno, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Diferencia", "Retorno a Pagar", "Registrado por", "Ref_Abono"])
+    
+    # Estandarizar nombre de columna a singular para toda la app
     if "Retorno a Pagar" in df.columns:
-        df.rename(columns={"Retorno a Pagar": "Retornos por pagar"}, inplace=True)
-    if "Retornos por pagar" not in df.columns:
-        df["Retornos por pagar"] = df["Monto Total"] - df["Diferencia"]
+        df.rename(columns={"Retorno a Pagar": "Retorno por pagar"}, inplace=True)
+    
+    # Asegurar que la columna existe y el cálculo es correcto
+    if "Retorno por pagar" not in df.columns:
+        df["Retorno por pagar"] = df["Monto Total"] - df["Diferencia"]
+    
+    # Recalcular si el valor es 0 pero hay montos (evita el error de visualización $0.00)
+    def corregir_neto(row):
+        monto = float(row.get("Monto Total", 0))
+        dif = float(row.get("Diferencia", 0))
+        neto = float(row.get("Retorno por pagar", 0))
+        if neto == 0 and monto > 0:
+            return monto - dif
+        return neto
+        
+    df["Retorno por pagar"] = df.apply(corregir_neto, axis=1)
     return df
 
 def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno_neto, ref_abono="---"):
@@ -510,7 +706,7 @@ def obtener_datos_retorno_manual():
     # Usar 'Monto Total' para consistencia con el rename_map y otras hojas
     return obtener_datos_resiliente(sheet_retorno_manual, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Registrado por"])
 
-def registrar_retorno_manual(nombre, banco, proveedor, monto):
+def registrar_retorno_manual(monto):
     """Guarda un nuevo registro de retorno manual en Google Sheets con serie 30000"""
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
@@ -518,14 +714,16 @@ def registrar_retorno_manual(nombre, banco, proveedor, monto):
         num_filas = len(df_cache) + 1
         nuevo_ticket = 30000 + num_filas
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
-        sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre, banco, proveedor, monto, nombre_usuario])
+        # Usamos nombre_usuario en la columna 'Nombre' para indicar quién registró el retorno (ahora global)
+        sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre_usuario, "---", "---", monto, nombre_usuario])
         obtener_datos_retorno_manual.clear()
+        enviar_notificacion_whatsapp(nuevo_ticket, monto)
         return True
     except Exception:
         return False
 
-def actualizar_retorno_manual(ticket_id, nombre, banco, proveedor, monto):
-    """Actualiza un retorno manual y registra en auditoría"""
+def actualizar_retorno_manual(ticket_id, monto):
+    """Actualiza un retorno manual (solo monto) y registra en auditoría"""
     try:
         df = obtener_datos_retorno_manual()
         idx = df[df["Ticket"].astype(str) == str(ticket_id)].index
@@ -535,23 +733,23 @@ def actualizar_retorno_manual(ticket_id, nombre, banco, proveedor, monto):
         row_idx = idx[0] + 2
         
         cambios_ant = []; cambios_new = []
-        if str(orig['Nombre']) != str(nombre): 
-            cambios_ant.append(f"Nom: {orig['Nombre']}"); cambios_new.append(f"Nom: {nombre}")
-        if str(orig['Banco']) != str(banco): 
-            cambios_ant.append(f"Bco: {orig['Banco']}"); cambios_new.append(f"Bco: {banco}")
-        if str(orig['Proveedor']) != str(proveedor): 
-            cambios_ant.append(f"Prov: {orig['Proveedor']}"); cambios_new.append(f"Prov: {proveedor}")
-        if float(orig['Monto']) != float(monto): 
-            cambios_ant.append(f"Mto: ${float(orig['Monto']):,.2f}"); cambios_new.append(f"Mto: ${float(monto):,.2f}")
+        # Solo permitimos editar el monto en el nuevo flujo simplificado
+        if float(orig['Monto Total']) != float(monto): 
+            cambios_ant.append(f"Mto: ${float(orig['Monto Total']):,.2f}"); cambios_new.append(f"Mto: ${float(monto):,.2f}")
             
         if not cambios_ant: return True
         
         det_ant = " | ".join(cambios_ant); det_new = " | ".join(cambios_new)
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
         
-        # En gspread, update espera una lista de listas para rangos
-        sheet_retorno_manual.update(f"C{row_idx}:G{row_idx}", [[nombre, banco, proveedor, monto, nombre_usuario]])
+        # Mantener Banco y Proveedor como "---" si se edita un registro nuevo, o respetar los antiguos si se edita uno viejo
+        nuevo_nombre = orig['Nombre']
+        nuevo_banco = orig['Banco']
+        nuevo_prov = orig['Proveedor']
+        
+        sheet_retorno_manual.update(f"C{row_idx}:G{row_idx}", [[nuevo_nombre, nuevo_banco, nuevo_prov, monto, nombre_usuario]])
         registrar_auditoria("---", ticket_id, "Edición Retorno Manual", det_ant, det_new)
+        enviar_notificacion_whatsapp(ticket_id, monto, accion="edición")
         
         obtener_datos_retorno_manual.clear()
         return True
@@ -639,6 +837,7 @@ def registrar_pago(cuenta, proveedor, monto):
     # Agregar la nueva fila con el registro del abono y el responsable
     sheet.append_row([nuevo_ticket, fecha_actual, cuenta, proveedor, monto, nombre_usuario])
     obtener_datos.clear()  # Forzar refresco de datos
+    enviar_notificacion_whatsapp(nuevo_ticket, monto)
     return nuevo_ticket
 
 def registrar_auditoria(ticket_abono, ticket_retorno, accion, anterior, nuevo):
@@ -701,6 +900,7 @@ def actualizar_pago_sincronizado(ticket_id, nueva_cuenta, nuevo_prov, nuevo_mont
         
         # 5. Registrar Auditoría combinada
         registrar_auditoria(ticket_id, t_ret_id, "Edición", det_ant, det_new)
+        enviar_notificacion_whatsapp(ticket_id, nuevo_monto, accion="edición")
         
         obtener_datos.clear()
         obtener_datos_retorno.clear()
@@ -719,8 +919,8 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-is_editor = st.session_state.usuario_logueado.get('rol') == 'Editor'
-is_factura = st.session_state.usuario_logueado.get('rol') == 'Factura'
+is_editor = st.session_state.usuario_logueado.get('rol') == 'Administrador'
+is_factura = st.session_state.usuario_logueado.get('rol') == 'Colaborador'
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state.usuario_logueado = None
@@ -732,6 +932,32 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 
 
 # --- INTERFAZ GRAFICA (UI) ---
+
+# Inicialización de estados de inputs para etiquetas dinámicas y persistencia
+if "sel_mes" not in st.session_state:
+    st.session_state.sel_mes = MESES_MAP[datetime.now().month]
+if "sel_anio" not in st.session_state:
+    st.session_state.sel_anio = datetime.now().year
+
+# Inicializar los valores de los widgets (usando sus 'key')
+if "ing_input" not in st.session_state:
+    st.session_state.ing_input = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+
+if "pago_input" not in st.session_state:
+    st.session_state.pago_input = 50000.0
+
+if "ret_input_monto" not in st.session_state:
+    st.session_state.ret_input_monto = 50000.0
+
+# Sincronización para etiquetas (labels)
+st.session_state.ingreso_mensual = st.session_state.ing_input
+st.session_state.monto_pago_val = st.session_state.pago_input
+st.session_state.monto_retorno_val = st.session_state.ret_input_monto
+
+# Asegurar que el monto del pago sea válido para el min_value de 0.01
+if st.session_state.pago_input < 0.01:
+    st.session_state.pago_input = 50000.0
+    st.session_state.monto_pago_val = 50000.0
 
 st.title("💸 Inside - Gestión de Rol de Pagos")
 
@@ -751,13 +977,16 @@ def suma_valida(df, col):
     return vals[(vals < 9999) | (vals > 41000)].sum()
 
 t_abonado = suma_valida(df_gl_abono, "Monto Total")
-t_ret_efe = suma_valida(df_gl_retorno, "Retornos por pagar")
+t_ret_auto_bruto = suma_valida(df_gl_retorno, "Retorno por pagar")
 dif_ret = suma_valida(df_gl_retorno, "Diferencia")
 t_manual = pd.to_numeric(df_gl_manual["Monto Total"], errors='coerce').fillna(0).sum()
-adeudo = t_ret_efe - t_manual
+# 'Retorno por pagar' neto es la suma automática menos lo entregado manualmente (global)
+t_ret_neto = t_ret_auto_bruto - t_manual
+adeudo = t_ret_neto
 
 st.write("<br>", unsafe_allow_html=True)
-col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+# --- DASHBOARD LAYOUT (Centered Rows) ---
+col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
 
 def render_metric_card(col, title, value, border_color):
     html_card = f"""
@@ -787,11 +1016,18 @@ def render_metric_card(col, title, value, border_color):
 color_adeudo = "#10b981" if adeudo <= 0 else "#ef4444"
 semaforo_m = "🟢" if adeudo <= 0 else "🔴"
 
-render_metric_card(col_m1, "Total Abonado", t_abonado, "#3b82f6") # Azul
-render_metric_card(col_m2, "Efectivo de Retorno", t_ret_efe, "#f59e0b") # Naranja
-render_metric_card(col_m3, "Diferencia", dif_ret, "#ef4444") # Rojo
-render_metric_card(col_m4, "Retorno Manual", t_manual, "#10b981") # Verde
-render_metric_card(col_m5, f"{semaforo_m} Adeudo", adeudo, color_adeudo) # Dinámico
+# Fila 1: 3 cuadros (Solo Administradores)
+if is_editor:
+    col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
+    render_metric_card(col_r1_1, "Pago total a proveedor", t_abonado, "#3b82f6") # Azul
+    render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
+    render_metric_card(col_r1_3, "Diferencia Inside", dif_ret, "#ef4444") # Rojo
+
+# Fila 2: 2 cuadros centrados
+st.write("<br>", unsafe_allow_html=True)
+col_r2_space1, col_r2_1, col_r2_2, col_r2_space2 = st.columns([1, 2, 2, 1])
+render_metric_card(col_r2_1, "Retorno entregado", t_manual, "#10b981") # Verde
+render_metric_card(col_r2_2, f"{semaforo_m} Diferencia Proveedor", adeudo, color_adeudo) # Dinámico
 st.write("<br>", unsafe_allow_html=True)
 
 @st.cache_data(ttl=1)
@@ -805,24 +1041,40 @@ def obtener_auditoria():
 
 if is_editor:
     # 1. PRONÓSTICO DE INGRESO
-    st.header("📈 Pronóstico de Ingreso", divider="gray")
-    col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
-    with col_p1:
-        nuevo_ingreso = st.number_input(f"Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", value=st.session_state.ingreso_mensual, step=1000.0)
-        st.session_state.ingreso_mensual = nuevo_ingreso
-    with col_p2:
-        meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-        mes_actual_idx = datetime.now().month - 1
-        st.selectbox("Mes", meses, index=mes_actual_idx)
-    with col_p3:
-        st.number_input("Año", value=datetime.now().year, min_value=2020, max_value=2100)
-    
-    # 2. REGISTRO A NUEVO PAGO A PROVEEDOR
-    st.header("📝 Registro a nuevo pago a proveedor", divider="gray")
-    st.write("Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.")
-    
-    # Recuadro gris para el registro
     with st.container(border=True):
+        # Franjita azul claro (estilo métricas)
+        st.markdown('<div style="background-color: #60A5FA; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h5 style='margin-top: -0.5rem; margin-bottom: 1rem; color: #364350; font-weight: 800;'>📈 Pronóstico de Ingreso</h5>", unsafe_allow_html=True)
+        
+        col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+        
+        def reload_ingreso():
+            st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+
+        with col_p2:
+            meses_lista = list(MESES_MAP.values())
+            st.selectbox("Mes", meses_lista, key="sel_mes", on_change=reload_ingreso)
+        with col_p3:
+            st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
+
+        with col_p1:
+            def update_ingreso_persistente():
+                monto_nuevo = st.session_state.ing_input
+                st.session_state.ingreso_mensual = monto_nuevo
+                guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_nuevo)
+            
+            st.number_input(f"Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
+                            step=1000.0, key="ing_input", on_change=update_ingreso_persistente)
+            nuevo_ingreso = st.session_state.ingreso_mensual
+    
+    # 2. REGISTRO DE PAGO A PROVEEDOR
+    with st.container(border=True):
+        # Franjita verde
+        st.markdown('<div style="background-color: #10b981; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h5 style='margin-top: -0.5rem; color: #364350; font-weight: 800;'>📝 Registro de pago a proveedor</h5>", unsafe_allow_html=True)
+        st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
+        
+        st.write("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -842,10 +1094,15 @@ if is_editor:
             else:
                 proveedor_seleccionado = st.selectbox("Proveedor Destino", lista_prov_form, key=f"abono_prov_{cuenta_seleccionada}")
                 pct_actual = prov_validos[prov_validos["Nombre"] == proveedor_seleccionado][col_pct].iloc[0]
-                st.info(f"💡 Reparto actual: {pct_actual}%")
+
         with col3:
-            monto_ingresado = st.number_input(f"Monto del Pago (${st.session_state.monto_pago_val:,.2f} MXN)", min_value=0.01, value=50000.0, step=100.0)
-            st.session_state.monto_pago_val = monto_ingresado
+            def update_pago():
+                st.session_state.monto_pago_val = st.session_state.pago_input
+            
+            st.number_input(f"Monto del Pago (${st.session_state.pago_input:,.2f} MXN)", 
+                            min_value=0.01, step=100.0, 
+                            key="pago_input", on_change=update_pago)
+            monto_ingresado = st.session_state.monto_pago_val
         
         st.write("<br>", unsafe_allow_html=True)
         btn_guardar = st.button("Guardar Registro", type="primary", use_container_width=True)
@@ -883,316 +1140,209 @@ if is_editor:
                         except Exception as e:
                             st.error(f"❌ Ocurrió un error al guardar: {e}")
 
-
-if is_editor:
-    # --- HISTORIAL DE ABONO (DESPLEGABLE) ---
-    with st.expander("🕒 Ver Historial de Movimientos Abono", expanded=False):
-        df_historial = obtener_datos()
-        if df_historial.empty:
-            st.info("Aún no se han registrado abonos.")
-        else:
-            registros_recientes = df_historial.sort_values(by="Fecha", ascending=False).copy()
-            if "Cuenta" in registros_recientes.columns:
-                registros_recientes["Cuenta"] = registros_recientes["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
-            
-            registros_recientes['Fecha_DT'] = pd.to_datetime(registros_recientes['Fecha'], errors='coerce')
-            registros_recientes['Mes_Filtro'] = registros_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
-            registros_recientes['Nombre_Filtro'] = registros_recientes['Cuenta'].astype(str).apply(lambda x: x.split(" (")[0] if " (" in x else x)
-            registros_recientes['Banco_Filtro'] = registros_recientes['Cuenta'].astype(str).apply(lambda x: x.split(" (")[1].replace(")", "") if " (" in x else "")
-            
-            st.markdown("##### 🔍 Filtros de Búsqueda")
-            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            df_filtrado = registros_recientes.copy()
-            
-            with f_col1:
-                lista_meses = ["Todos"] + [m for m in MESES_MAP.values() if m in df_filtrado['Mes_Filtro'].values]
-                sel_mes = st.selectbox("Mes", lista_meses, key="f_mes_abono")
-                if sel_mes != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Filtro'] == sel_mes]
-            with f_col2:
-                lista_cuentas = ["Todas"] + sorted(df_filtrado['Nombre_Filtro'].dropna().unique().tolist())
-                sel_cuenta = st.selectbox("Cuenta (Titular)", lista_cuentas, key="f_cta_abono")
-                if sel_cuenta != "Todas": df_filtrado = df_filtrado[df_filtrado['Nombre_Filtro'] == sel_cuenta]
-            with f_col3:
-                lista_bancos = ["Todos"] + sorted([b for b in df_filtrado['Banco_Filtro'].dropna().unique().tolist() if b])
-                sel_banco = st.selectbox("Banco", lista_bancos, key="f_bco_abono")
-                if sel_banco != "Todos": df_filtrado = df_filtrado[df_filtrado['Banco_Filtro'] == sel_banco]
-            with f_col4:
-                lista_provs = ["Todos"] + sorted(df_filtrado['Proveedor'].dropna().unique().tolist())
-                sel_prov = st.selectbox("Proveedor", lista_provs, key="f_prov_abono")
-                if sel_prov != "Todos": df_filtrado = df_filtrado[df_filtrado['Proveedor'] == sel_prov]
-                    
-            st.divider()
-            c_tk, c1, c2, c3, c4, c5, c6 = st.columns([0.6, 1.0, 1.5, 0.7, 1.0, 1.0, 1.0])
-            c_tk.markdown("**Ticket**"); c1.markdown("**Fecha**"); c2.markdown("**Nombre**"); c3.markdown("**Cuenta**"); c4.markdown("**Proveedor**"); c5.markdown("**Monto**"); c6.markdown("**Usuario**")
-            st.divider()
-            
-            if df_filtrado.empty: st.info("No se encontraron registros.")
+        # --- HISTORIAL DE PAGO A PROVEEDOR (DESPLEGABLE) ---
+        st.markdown('<div id="historial-abonos"></div>', unsafe_allow_html=True)
+        with st.expander("🕒 Ver historial de pago a proveedor", expanded=False):
+            df_historial = obtener_datos()
+            if df_historial.empty:
+                st.info("Aún no se han registrado abonos.")
             else:
-                for idx, row in df_filtrado.iterrows():
-                    t_id = str(row.get('Ticket', '---'))
-                    # Contenedor con borde para cada ticket
-                    with st.container(border=True):
-                        c_tk, c1, c2, c3, c4 = st.columns([1.0, 1.2, 1.5, 1.0, 1.5])
-                        c_tk.write(f"🎫 **{t_id}**")
-                        c1.write(f"📅 {row['Fecha'].split(' ')[0]}")
-                        c2.write(f"🏦 {row['Cuenta']}")
-                        c3.write(f"💰 ${float(row.get('Monto Total', 0)):,.0f}")
+                registros_recientes = df_historial.sort_values(by="Fecha", ascending=False).copy()
+                if "Cuenta" in registros_recientes.columns:
+                    registros_recientes["Cuenta"] = registros_recientes["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+                
+                registros_recientes['Fecha_DT'] = pd.to_datetime(registros_recientes['Fecha'], errors='coerce')
+                registros_recientes['Mes_Filtro'] = registros_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
+                registros_recientes['Nombre_Filtro'] = registros_recientes['Cuenta'].astype(str).apply(lambda x: x.split(" (")[0] if " (" in x else x)
+                registros_recientes['Banco_Filtro'] = registros_recientes['Cuenta'].astype(str).apply(lambda x: x.split(" (")[1].replace(")", "") if " (" in x else "")
+                
+                st.markdown("##### 🔍 Filtros de Búsqueda")
+                f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
+                df_filtrado = registros_recientes.copy()
+                
+                with f_col1:
+                    lista_users = ["Todos"] + sorted(df_filtrado["Registrado por"].dropna().astype(str).unique().tolist())
+                    sel_user = st.selectbox("Usuario", lista_users, key="f_user_abono")
+                    if sel_user != "Todos": df_filtrado = df_filtrado[df_filtrado["Registrado por"] == sel_user]
+                with f_col2:
+                    f_tk = st.text_input("Ticket", key="f_tk_abono", placeholder="Buscar...")
+                    if f_tk: df_filtrado = df_filtrado[df_filtrado['Ticket'].astype(str).str.contains(f_tk, case=False)]
+                with f_col3:
+                    f_fecha = st.date_input("Fecha", value=None, key="f_fecha_abono")
+                    if f_fecha: df_filtrado = df_filtrado[df_filtrado['Fecha_DT'].dt.date == f_fecha]
+                with f_col4:
+                    lista_cuentas = ["Todas"] + sorted(df_filtrado['Nombre_Filtro'].dropna().unique().tolist())
+                    sel_cuenta = st.selectbox("Titular", lista_cuentas, key="f_cta_abono")
+                    if sel_cuenta != "Todas": df_filtrado = df_filtrado[df_filtrado['Nombre_Filtro'] == sel_cuenta]
+                with f_col5:
+                    lista_bancos = ["Todos"] + sorted([b for b in df_filtrado['Banco_Filtro'].dropna().unique().tolist() if b])
+                    sel_banco = st.selectbox("Banco", lista_bancos, key="f_bco_abono")
+                    if sel_banco != "Todos": df_filtrado = df_filtrado[df_filtrado['Banco_Filtro'] == sel_banco]
+                with f_col6:
+                    lista_provs = ["Todos"] + sorted(df_filtrado['Proveedor'].dropna().unique().tolist())
+                    sel_prov = st.selectbox("Proveedor", lista_provs, key="f_prov_abono")
+                    if sel_prov != "Todos": df_filtrado = df_filtrado[df_filtrado['Proveedor'] == sel_prov]
                         
-                        with c4:
+                st.divider()
+                # Pesos de columna sincronizados para cabecera y filas
+                COL_PESOS = [0.6, 0.9, 1.8, 1.2, 0.9, 1.4]
+                
+                c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
+                c_tk.markdown("<p style='text-align: center; margin: 0;'><b>Ticket</b></p>", unsafe_allow_html=True)
+                c_f.markdown("<p style='text-align: center; margin: 0;'><b>Fecha</b></p>", unsafe_allow_html=True)
+                c_c.markdown("<p style='text-align: center; margin: 0;'><b>Cuenta</b></p>", unsafe_allow_html=True)
+                c_p.markdown("<p style='text-align: center; margin: 0;'><b>Proveedor</b></p>", unsafe_allow_html=True)
+                c_m.markdown("<p style='text-align: center; margin: 0;'><b>Monto</b></p>", unsafe_allow_html=True)
+                c_u.markdown("<p style='text-align: center; margin: 0;'><b>Usuario</b></p>", unsafe_allow_html=True)
+                st.divider()
+                
+                if df_filtrado.empty: st.info("No se encontraron registros.")
+                else:
+                    for idx, row in df_filtrado.iterrows():
+                        t_id = str(row.get('Ticket', '---'))
+                        # Contenedor con borde para cada ticket
+                        with st.container(border=True):
+                            c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
+                            c_tk.markdown(f"<p style='text-align: center; margin: 0;'>🎫 <b>{t_id}</b></p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_c.markdown(f"<p style='text-align: center; margin: 0;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
+                            c_u.markdown(f"<p style='text-align: center; margin: 0;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
+                            
                             with st.popover("✏️ Editar Ticket", use_container_width=True):
-                                # Seccion de Edicion
-                                st.markdown("##### ✏️ Editar Registro")
-                                nueva_cta = st.selectbox("Cambiar Cuenta", CUENTAS, index=CUENTAS.index(row['Cuenta']) if row['Cuenta'] in CUENTAS else 0, key=f"edit_cta_{t_id}")
-                                
-                                # Filtrar proveedores validos para la nueva cuenta
-                                p_df = st.session_state.proveedores_df
-                                p_validos = p_df[(p_df["Visible"] == True) & (p_df[nueva_cta] > 0)]
-                                l_prov = p_validos["Nombre"].unique().tolist()
-                                nueva_prov = st.selectbox("Cambiar Proveedor", l_prov, index=l_prov.index(row['Proveedor']) if row['Proveedor'] in l_prov else 0, key=f"edit_prov_{t_id}")
-                                
-                                nuevo_mto = st.number_input("Nuevo Monto", value=float(row.get('Monto Total', 0)), key=f"edit_mto_{t_id}")
-                                
-                                if st.button("💾 Actualizar y Sincronizar", key=f"btn_edit_{t_id}", type="primary", use_container_width=True):
-                                    with st.spinner("Actualizando..."):
-                                        if actualizar_pago_sincronizado(t_id, nueva_cta, nueva_prov, nuevo_mto):
-                                            st.success("✅ Registro actualizado.")
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ Error al actualizar.")
-                                
-                                st.divider()
-                                # Seccion de Auditoria
-                                st.markdown("##### 📜 Historial de Cambios")
-                                df_aud = obtener_auditoria()
-                                df_este_ticket = df_aud[df_aud["Ticket_Abono"].astype(str) == t_id]
-                                if df_este_ticket.empty:
-                                    st.info("Sin ediciones previas.")
-                                else:
-                                    st.dataframe(df_este_ticket[["Fecha", "Usuario", "Accion", "Dato_Anterior", "Dato_Nuevo"]], use_container_width=True, hide_index=True)
+                                    # Seccion de Edicion
+                                    st.markdown("##### ✏️ Editar Registro")
+                                    nueva_cta = st.selectbox("Cambiar Cuenta", CUENTAS, index=CUENTAS.index(row['Cuenta']) if row['Cuenta'] in CUENTAS else 0, key=f"edit_cta_{t_id}")
+                                    
+                                    # Filtrar proveedores validos para la nueva cuenta
+                                    p_df = st.session_state.proveedores_df
+                                    p_validos = p_df[(p_df["Visible"] == True) & (p_df[nueva_cta] > 0)]
+                                    l_prov = p_validos["Nombre"].unique().tolist()
+                                    nueva_prov = st.selectbox("Cambiar Proveedor", l_prov, index=l_prov.index(row['Proveedor']) if row['Proveedor'] in l_prov else 0, key=f"edit_prov_{t_id}")
+                                    
+                                    nuevo_mto = st.number_input("Nuevo Monto", value=float(row.get('Monto Total', 0)), key=f"edit_mto_{t_id}")
+                                    
+                                    if st.button("💾 Actualizar y Sincronizar", key=f"btn_edit_{t_id}", type="primary", use_container_width=True):
+                                        with st.spinner("Actualizando..."):
+                                            if actualizar_pago_sincronizado(t_id, nueva_cta, nueva_prov, nuevo_mto):
+                                                st.success("✅ Registro actualizado.")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Error al actualizar.")
+                                    
+                                    st.divider()
+                                    # Seccion de Auditoria
+                                    st.markdown("##### 📜 Historial de Cambios")
+                                    df_aud = obtener_auditoria()
+                                    df_este_ticket = df_aud[df_aud["Ticket_Abono"].astype(str) == t_id]
+                                    if df_este_ticket.empty:
+                                        st.info("Sin ediciones previas.")
+                                    else:
+                                        st.dataframe(df_este_ticket[["Fecha", "Usuario", "Accion", "Dato_Anterior", "Dato_Nuevo"]], use_container_width=True, hide_index=True)
 
-# 3. RETORNOS POR PAGAR
-st.header("🔄 Retornos por pagar", divider="gray")
-st.write("El registro de retornos es ahora automático al reportar un pago a proveedor.")
+# 3. RETORNO ENTREGADO
 
-if is_factura:    
+
+if is_editor or is_factura:
+    # 3. RETORNO ENTREGADO (GLOBAL)
     with st.container(border=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            cuenta_r = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS, key="ret_cta_manual")
-        with col2:
-            p_df = st.session_state.proveedores_df
-            p_validos = p_df[(p_df["Visible"] == True) & (p_df[cuenta_r] > 0)]
-            l_prov = p_validos["Nombre"].unique().tolist()
-            if not l_prov:
-                st.warning(f"⚠️ Sin proveedores activos para {cuenta_r}")
-                prov_r = None
-            else:
-                prov_r = st.selectbox("Proveedor Destino", l_prov, key="ret_prov_manual")
-                pct_actual = p_validos[p_validos["Nombre"] == prov_r][cuenta_r].iloc[0]
-                st.info(f"💡 Reparto actual: {pct_actual}%")
-        with col3:
-            # Inicializar variable de sesión para el monto del retorno si no existe
-            if "monto_retorno_val" not in st.session_state:
-                st.session_state.monto_retorno_val = 50000.0
-            monto_r = st.number_input(f"Monto del Retorno (${st.session_state.monto_retorno_val:,.2f} MXN)", min_value=0.0, value=st.session_state.monto_retorno_val, step=100.0, key="ret_input_monto")
-            st.session_state.monto_retorno_val = monto_r
+        # Franjita naranja
+        st.markdown('<div style="background-color: #f59e0b; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h5 style='margin-top: -0.5rem; color: #364350; font-weight: 800;'>🔄 Retorno entregado</h5>", unsafe_allow_html=True)
+        st.write("<small>Registra el monto total de retorno entregado al proveedor de forma global.</small>", unsafe_allow_html=True)
+        
+        st.write("<br>", unsafe_allow_html=True)
+        # Solo columna para el monto
+        def update_retorno():
+            st.session_state.monto_retorno_val = st.session_state.ret_input_monto
+            
+        monto_r = st.number_input(f"Monto del Retorno Entregado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
+                                  min_value=0.0, step=100.0, 
+                                  key="ret_input_monto", on_change=update_retorno)
         
         st.write("<br>", unsafe_allow_html=True)
         if st.button("Guardar Registro de Retorno", type="primary", use_container_width=True, key="ret_btn_manual"):
-            if not prov_r:
-                st.error("Debes seleccionar un proveedor válido.")
-            elif monto_r <= 0:
+            if monto_r <= 0:
                 st.warning("El monto debe ser mayor a 0.")
             else:
-                with st.spinner("Guardando Retorno Manual..."):
-                    # Desglosar cuenta
-                    nombre_tit = cuenta_r.split(" (")[0] if " (" in cuenta_r else cuenta_r
-                    banco_tit = cuenta_r.split(" (")[1].replace(")", "") if " (" in cuenta_r else ""
-                    
-                    if registrar_retorno_manual(nombre_tit, banco_tit, prov_r, float(monto_r)):
-                        st.success(f"✅ ¡Retorno manual de ${monto_r:,.2f} MXN registrado exitosamente!")
-                        st.session_state.monto_retorno_val = 0.0 # Reset para el siguiente
+                with st.spinner("Guardando Retorno Global..."):
+                    if registrar_retorno_manual(float(monto_r)):
+                        st.success(f"✅ ¡Retorno global de ${monto_r:,.2f} MXN registrado exitosamente!")
+                        st.session_state.monto_retorno_val = 50000.0 # Reset
                         st.rerun()
                     else:
-                        st.error("❌ Ocurrió un error al guardar el retorno manual.")
-
-
-
-
-# Tabla resumen de retornos
-df_h_ret = obtener_datos_retorno()
-df_h_manual = obtener_datos_retorno_manual()
-
-if not df_h_ret.empty or not df_h_manual.empty:
-    resumen_ret = []
-    for c in CUENTAS:
-        nombre = c.split(" (")[0] if " (" in c else c
-        banco = c.split(" (")[1].replace(")", "") if " (" in c else ""
+                        st.error("❌ Ocurrió un error al guardar el retorno global.")
         
-        # 1. Datos Automáticos
-        df_c = df_h_ret[(df_h_ret["Nombre"] == nombre) & (df_h_ret["Banco"] == banco)]
-        total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
-        total_ret_pagar_auto = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
-        retorno_auto_neto = total_monto_prov - total_ret_pagar_auto
-        
-        # 2. Datos Manuales (Pagados)
-        df_m = df_h_manual[(df_h_manual["Nombre"] == nombre) & (df_h_manual["Banco"] == banco)]
-        total_pagado_manual = pd.to_numeric(df_m["Monto Total"], errors='coerce').fillna(0).sum()
-        
-        # 3. Adeudo final
-        adeudo_num = retorno_auto_neto - total_pagado_manual
-        semaforo_t = "🟢" if adeudo_num <= 0 else "🔴"
-        
-        resumen_ret.append({
-            "Nombre": nombre,
-            "Cuenta": banco,
-            "Pago Total a Proveedor": total_monto_prov,
-            "Diferencia": total_ret_pagar_auto,
-            "Retornos por pagar": retorno_auto_neto,
-            "Retorno pagado": total_pagado_manual,
-            "Adeudo": f"{semaforo_t} ${adeudo_num:,.2f}"
-        })
-    df_ret_final = pd.DataFrame(resumen_ret)
-    
-    # Formatear columnas de dinero (excepto Adeudo que ya está formateado)
-    for col in ["Pago Total a Proveedor", "Diferencia", "Retornos por pagar", "Retorno pagado"]:
-        df_ret_final[col] = df_ret_final[col].apply(lambda x: f"${x:,.2f}")
-    
-    st.dataframe(df_ret_final, use_container_width=True, hide_index=True)
-
-else:
-    st.info("No hay registros de retorno aún.")
-
-# --- HISTORIAL DE RETORNO (DESPLEGABLE) ---
-with st.expander("🕒 Ver Historial de Movimientos Retornos", expanded=False):
-    df_h_ret_full = obtener_datos_retorno()
-    if df_h_ret_full.empty:
-        st.info("Aún no se han registrado retornos.")
-    else:
-        ret_recientes = df_h_ret_full.sort_values(by="Fecha", ascending=False).copy()
-        ret_recientes['Fecha_DT'] = pd.to_datetime(ret_recientes['Fecha'], errors='coerce')
-        ret_recientes['Mes_Filtro'] = ret_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
-        ret_recientes['Nombre_Filtro'] = ret_recientes['Nombre'].astype(str)
-        ret_recientes['Banco_Filtro'] = ret_recientes['Banco'].astype(str)
-        
-        st.markdown("##### 🔍 Filtros de Búsqueda")
-        fr_col1, fr_col2, fr_col3, fr_col4 = st.columns(4)
-        df_ret_filtrado = ret_recientes.copy()
-        
-        with fr_col1:
-            sel_mes_r = st.selectbox("Mes", ["Todos"] + [m for m in MESES_MAP.values() if m in df_ret_filtrado['Mes_Filtro'].values], key="f_mes_ret")
-            if sel_mes_r != "Todos": df_ret_filtrado = df_ret_filtrado[df_ret_filtrado['Mes_Filtro'] == sel_mes_r]
-        with fr_col2:
-            sel_cta_r = st.selectbox("Cuenta (Titular)", ["Todas"] + sorted(df_ret_filtrado['Nombre_Filtro'].dropna().unique().tolist()), key="f_cta_ret")
-            if sel_cta_r != "Todas": df_ret_filtrado = df_ret_filtrado[df_ret_filtrado['Nombre_Filtro'] == sel_cta_r]
-        with fr_col3:
-            bancos_r = ["Todos"] + sorted([b for b in df_ret_filtrado['Banco_Filtro'].dropna().unique().tolist() if b])
-            sel_bco_r = st.selectbox("Banco", bancos_r, key="f_bco_ret")
-            if sel_bco_r != "Todos": df_ret_filtrado = df_ret_filtrado[df_ret_filtrado['Banco_Filtro'] == sel_bco_r]
-        with fr_col4:
-            provs_r = ["Todos"] + sorted(df_ret_filtrado['Proveedor'].dropna().unique().tolist())
-            sel_prov_r = st.selectbox("Proveedor", provs_r, key="f_prov_ret")
-            if sel_prov_r != "Todos": df_ret_filtrado = df_ret_filtrado[df_ret_filtrado['Proveedor'] == sel_prov_r]
-                
-        st.divider()
-        cr_tk, cr1, cr2, cr3, cr4, cr5, cr6, cr7, cr8 = st.columns([0.6, 0.7, 1.0, 0.5, 0.8, 0.8, 0.8, 0.8, 0.8])
-        cr_tk.markdown("<small>**Ticket**</small>", unsafe_allow_html=True)
-        cr1.markdown("<small>**Fecha**</small>", unsafe_allow_html=True)
-        cr2.markdown("<small>**Nombre**</small>", unsafe_allow_html=True)
-        cr3.markdown("<small>**Cuenta**</small>", unsafe_allow_html=True)
-        cr4.markdown("<small>**Proveedor**</small>", unsafe_allow_html=True)
-        cr5.markdown("<small>**P. Total**</small>", unsafe_allow_html=True)
-        cr6.markdown("<small>**Diferencia**</small>", unsafe_allow_html=True)
-        cr7.markdown("<small>**Retorno por pagar**</small>", unsafe_allow_html=True)
-        cr8.markdown("<small>**Usuario**</small>", unsafe_allow_html=True)
-        st.divider()
-        
-        if df_ret_filtrado.empty: st.info("No se encontraron registros.")
-        else:
-            for idx, row in df_ret_filtrado.iterrows():
-                cr_tk, cr1, cr2, cr3, cr4, cr5, cr6, cr7, cr8 = st.columns([0.6, 0.7, 1.0, 0.5, 0.8, 0.8, 0.8, 0.8, 0.8])
-                cr_tk.write(f"<small>`{row.get('Ticket', '---')}`</small>", unsafe_allow_html=True)
-                fecha_str = str(row["Fecha"]).split(" ")[0]
-                cr1.write(f"<small>{fecha_str}</small>", unsafe_allow_html=True)
-                cr2.write(f"<small>{row.get('Nombre', '---')}</small>", unsafe_allow_html=True)
-                cr3.write(f"<small>{row.get('Banco', '---')}</small>", unsafe_allow_html=True)
-                cr4.write(f"<small>{str(row['Proveedor'])}</small>", unsafe_allow_html=True)
-                cr5.write(f"<small>${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.2f}</small>", unsafe_allow_html=True)
-                cr6.write(f"<small>${pd.to_numeric(row.get('Diferencia', 0), errors='coerce'):,.2f}</small>", unsafe_allow_html=True)
-                cr7.write(f"<small>${pd.to_numeric(row.get('Retornos por pagar', 0), errors='coerce'):,.2f}</small>", unsafe_allow_html=True)
-                cr8.write(f"<small>{row.get('Registrado por', '---')}</small>", unsafe_allow_html=True)
-
-
-if is_factura:
-    with st.expander("🕒 Ver Historial de Retornos Manuales (Solo Factura)", expanded=False):
-        df_h_m = obtener_datos_retorno_manual()
-        if df_h_m.empty:
-            st.info("Aún no se han registrado retornos manuales.")
-        else:
-            m_recientes = df_h_m.sort_values(by="Fecha", ascending=False).copy()
-            m_recientes['Fecha_DT'] = pd.to_datetime(m_recientes['Fecha'], errors='coerce')
-            m_recientes['Mes_Filtro'] = m_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
-            
-            st.markdown("##### 🔍 Filtros de Búsqueda")
-            fm_col1, fm_col2, fm_col3, fm_col4 = st.columns(4)
-            df_m_filtrado = m_recientes.copy()
-            
-            with fm_col1:
-                sel_mes_m = st.selectbox("Mes", ["Todos"] + [m for m in MESES_MAP.values() if m in df_m_filtrado['Mes_Filtro'].values], key="f_mes_m")
-                if sel_mes_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado['Mes_Filtro'] == sel_mes_m]
-            with fm_col2:
-                sel_cta_m = st.selectbox("Cuenta (Titular)", ["Todas"] + sorted(df_m_filtrado['Nombre'].dropna().unique().tolist()), key="f_cta_m")
-                if sel_cta_m != "Todas": df_m_filtrado = df_m_filtrado[df_m_filtrado['Nombre'] == sel_cta_m]
-            with fm_col3:
-                bancos_m = ["Todos"] + sorted([b for b in df_m_filtrado['Banco'].dropna().unique().tolist() if b])
-                sel_bco_m = st.selectbox("Banco", bancos_m, key="f_bco_m")
-                if sel_bco_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado['Banco'] == sel_bco_m]
-            with fm_col4:
-                provs_m = ["Todos"] + sorted(df_m_filtrado['Proveedor'].dropna().unique().tolist())
-                sel_prov_m = st.selectbox("Proveedor", provs_m, key="f_prov_m")
-                if sel_prov_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado['Proveedor'] == sel_prov_m]
-                    
-            st.divider()
-            cm_tk, cm1, cm2, cm3, cm4, cm5, cm6 = st.columns([0.6, 1.0, 1.5, 0.7, 1.0, 1.0, 1.0])
-            cm_tk.markdown("**Ticket**"); cm1.markdown("**Fecha**"); cm2.markdown("**Nombre**"); cm3.markdown("**Banco**"); cm4.markdown("**Proveedor**"); cm5.markdown("**Monto**"); cm6.markdown("**Usuario**")
-            st.divider()
-            
-            if df_m_filtrado.empty: st.info("No se encontraron registros.")
+        # --- HISTORIAL DE RETORNO (DESPLEGABLE) ---
+        st.markdown('<div id="historial-retornos"></div>', unsafe_allow_html=True)
+        with st.expander("🕒 Ver historial de retorno entregado", expanded=False):
+            df_h_m = obtener_datos_retorno_manual()
+            if df_h_m.empty:
+                st.info("Aún no se han registrado retornos manuales.")
             else:
-                for idx, row in df_m_filtrado.iterrows():
-                    tm_id = str(row.get('Ticket', '---'))
-                    with st.container(border=True):
-                        col_main, col_edit = st.columns([4, 1])
-                        with col_main:
-                            c_tk, c_f, c_n, c_p, c_m = st.columns([0.8, 1.2, 2.0, 1.5, 1.5])
-                            c_tk.write(f"🎫 **{tm_id}**")
-                            c_f.write(f"📅 {str(row['Fecha']).split(' ')[0]}")
-                            c_n.write(f"🏦 {row['Nombre']} ({row['Banco']})")
-                            c_p.write(f"👤 {row['Proveedor']}")
-                            c_m.write(f"💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}")
+                m_recientes = df_h_m.sort_values(by="Fecha", ascending=False).copy()
+                m_recientes['Fecha_DT'] = pd.to_datetime(m_recientes['Fecha'], errors='coerce')
+                m_recientes['Mes_Filtro'] = m_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
+                
+                st.markdown("##### 🔍 Filtros de Búsqueda")
+                fm_col1, fm_col2, fm_col3 = st.columns(3)
+                df_m_filtrado = m_recientes.copy()
+                
+                with fm_col1:
+                    lista_users_m = ["Todos"] + sorted(df_m_filtrado["Registrado por"].dropna().astype(str).unique().tolist())
+                    sel_user_m = st.selectbox("Usuario", lista_users_m, key="f_user_m")
+                    if sel_user_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado["Registrado por"] == sel_user_m]
+                with fm_col2:
+                    f_tk_m = st.text_input("Ticket", key="f_tk_m", placeholder="Buscar...")
+                    if f_tk_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Ticket'].astype(str).str.contains(f_tk_m, case=False)]
+                with fm_col3:
+                    f_fecha_m = st.date_input("Fecha", value=None, key="f_fecha_m")
+                    if f_fecha_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Fecha_DT'].dt.date == f_fecha_m]
                         
-                        with col_edit:
-                            with st.popover("✏️ Editar", use_container_width=True):
-                                st.markdown("##### ✏️ Editar Retorno Manual")
-                                cta_full = f"{row['Nombre']} ({row['Banco']})"
-                                e_cta = st.selectbox("Cambiar Cuenta", CUENTAS, index=CUENTAS.index(cta_full) if cta_full in CUENTAS else 0, key=f"edit_cta_m_{tm_id}")
-                                
-                                p_df_e = st.session_state.proveedores_df
-                                p_val_e = p_df_e[(p_df_e["Visible"] == True) & (p_df_e[e_cta] > 0)]
-                                l_prov_e = p_val_e["Nombre"].unique().tolist()
-                                e_prov = st.selectbox("Cambiar Proveedor", l_prov_e, index=l_prov_e.index(row['Proveedor']) if row['Proveedor'] in l_prov_e else 0, key=f"edit_prov_m_{tm_id}")
-                                
-                                e_mto = st.number_input("Nuevo Monto", value=float(pd.to_numeric(row.get('Monto Total', 0), errors='coerce')), key=f"edit_mto_m_{tm_id}")
-                                
-                                if st.button("💾 Guardar Cambios", key=f"btn_edit_m_{tm_id}", type="primary", use_container_width=True):
-                                    with st.spinner("Actualizando..."):
-                                        nom_e = e_cta.split(" (")[0] if " (" in e_cta else e_cta
-                                        bco_e = e_cta.split(" (")[1].replace(")", "") if " (" in e_cta else ""
-                                        if actualizar_retorno_manual(tm_id, nom_e, bco_e, e_prov, e_mto):
-                                            st.success("✅ Registro actualizado.")
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ Error al actualizar.")
+                st.divider()
+                # Pesos de columna sincronizados para cabecera y filas
+                CM_PESOS = [0.6, 0.9, 2.2, 1.0, 0.8]
+                
+                cm_tk, cm_f, cm_p, cm_m, cm_e = st.columns(CM_PESOS)
+                cm_tk.markdown("<p style='text-align: center; margin: 0;'><b>Ticket</b></p>", unsafe_allow_html=True)
+                cm_f.markdown("<p style='text-align: center; margin: 0;'><b>Fecha</b></p>", unsafe_allow_html=True)
+                cm_p.markdown("<p style='text-align: center; margin: 0;'><b>Registrado por</b></p>", unsafe_allow_html=True)
+                cm_m.markdown("<p style='text-align: center; margin: 0;'><b>Monto</b></p>", unsafe_allow_html=True)
+                cm_e.markdown("<p style='text-align: center; margin: 0;'><b>Acción</b></p>", unsafe_allow_html=True)
+                st.divider()
+                
+                if df_m_filtrado.empty: st.info("No se encontraron registros.")
+                else:
+                    for idx, row in df_m_filtrado.iterrows():
+                        tm_id = str(row.get('Ticket', '---'))
+                        with st.container(border=True):
+                            c_tk, c_f, c_p, c_m, c_e = st.columns(CM_PESOS)
+                            c_tk.markdown(f"<p style='text-align: center; margin: 0;'>🎫 <b>{tm_id}</b></p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
+                            
+                            with c_e:
+                                with st.popover("✏️ Editar", use_container_width=True):
+                                    st.markdown("##### ✏️ Editar Retorno Manual")
+                                    st.info(f"Ticket: {tm_id}")
+                                    
+                                    nuevo_mto = st.number_input("Nuevo Monto", value=float(pd.to_numeric(row.get('Monto Total', 0), errors='coerce')), key=f"edit_mto_m_{tm_id}")
+                                    
+                                    if st.button("💾 Guardar Cambios", key=f"btn_edit_m_{tm_id}", type="primary", use_container_width=True):
+                                        with st.spinner("Actualizando..."):
+                                            if actualizar_retorno_manual(tm_id, nuevo_mto):
+                                                st.success("✅ Registro actualizado.")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Error al actualizar.")
+
+
+
+
+
+
 
 
 if is_editor:
@@ -1205,157 +1355,200 @@ if is_editor:
         st.warning(f"⚠️ Atención: Los porcentajes no suman 100% para algunas cuentas. El tablero se habilitará cuando la configuración sea correcta.")
         # No detenemos la ejecución para permitir llegar a la sección de Configuración abajo
     else:
-        # 4. TABLERO DE CONTROL
-        st.header("📊 Tablero de Control - Pagos por realizar", divider="gray")
-        
-        df_historial = obtener_datos()
-        if not df_historial.empty and "Cuenta" in df_historial.columns:
-            df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
-    
-        filas_resumen = []
-        for c in CUENTAS:
-            if " (" in c:
-                nombre = c.split(" (")[0]
-                banco = c.split(" (")[1].replace(")", "")
-            else:
-                nombre = c; banco = ""
+        # 4. TABLERO DE CONTROL 
+        with st.container(border=True):
+            # Franjita índigo para el tablero
+            st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+            st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
+            
+            # --- TABLA RESUMEN DE RETORNOS ---
+            df_h_ret_dash = obtener_datos_retorno()
+            df_h_manual_dash = obtener_datos_retorno_manual()
+            
+            if not df_h_ret_dash.empty:
+                resumen_ret_dash = []
+                sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                 
-            for idx, row_prov in prov_visibles.iterrows():
-                p = row_prov["Nombre"]
-                pct = float(row_prov.get(c, 0.0))
-                if pct > 0:
-                    ingreso_cuenta = st.session_state.ingreso_mensual / 5.0
-                    base_reparto = ingreso_cuenta * 0.40
-                    pagos_a_realizar = base_reparto * (pct / 100.0)
-                    filas_resumen.append({
-                        "Nombre": nombre, "Cuenta": banco, "Clave_Original": c,
-                        "Ingreso": ingreso_cuenta, "Proveedor": p,
-                        "Porcentaje": f"{pct}%", "Pagos a realizar": pagos_a_realizar
+                for c in CUENTAS:
+                    nombre_c = c.split(" (")[0] if " (" in c else c
+                    banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
+                    
+                    df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
+                    total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
+                    total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
+                    retorno_auto_bruto = total_monto_prov - total_dif_inside
+                    
+                    sum_pago_prov += total_monto_prov
+                    sum_dif_inside += total_dif_inside
+                    sum_ret_pagar_bruto += retorno_auto_bruto
+                    
+                    resumen_ret_dash.append({
+                        "Nombre": nombre_c,
+                        "Cuenta": banco_c,
+                        "Pago Total a Proveedor": f"${total_monto_prov:,.2f}",
+                        "Diferencia Inside": f"${total_dif_inside:,.2f}",
+                        "Retorno por pagar (Auto)": f"${retorno_auto_bruto:,.2f}"
                     })
+                
+                df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
+                st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
+                # st.dataframe(df_ret_final_dash.style.set_properties(**{'text-align': 'center'}), use_container_width=True, hide_index=True)
+                st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+                st.divider()
+            else:
+                st.info("No hay registros de retorno aún para procesar.")
+            
+            df_historial = obtener_datos()
+            if not df_historial.empty and "Cuenta" in df_historial.columns:
+                df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+    
+            filas_resumen = []
+            for c in CUENTAS:
+                if " (" in c:
+                    nombre = c.split(" (")[0]
+                    banco = c.split(" (")[1].replace(")", "")
+                else:
+                    nombre = c; banco = ""
+                    
+                for idx, row_prov in prov_visibles.iterrows():
+                    p = row_prov["Nombre"]
+                    pct = float(row_prov.get(c, 0.0))
+                    if pct > 0:
+                        ingreso_cuenta = st.session_state.ingreso_mensual / 5.0
+                        base_reparto = ingreso_cuenta * 0.40
+                        pagos_a_realizar = base_reparto * (pct / 100.0)
+                        filas_resumen.append({
+                            "Nombre": nombre, "Cuenta": banco, "Clave_Original": c,
+                            "Ingreso": ingreso_cuenta, "Proveedor": p,
+                            "Porcentaje": f"{pct}%", "Pagos a realizar": pagos_a_realizar
+                        })
+            
+            if not filas_resumen:
+                df_resumen = pd.DataFrame(columns=["Nombre", "Cuenta", "Clave_Original", "Ingreso", "Proveedor", "Porcentaje", "Pagos a realizar"])
+            else:
+                df_resumen = pd.DataFrame(filas_resumen)
+    
+            if not df_historial.empty:
+                df_historial["Monto Total"] = pd.to_numeric(df_historial["Monto Total"], errors='coerce').fillna(0)
+                pagos_agrupados = df_historial.groupby(["Cuenta", "Proveedor"])["Monto Total"].sum().reset_index()
+                pagos_agrupados.rename(columns={"Monto Total": "Pagado a proveedores", "Cuenta": "Clave_Original"}, inplace=True)
+                df_resumen = pd.merge(df_resumen, pagos_agrupados, on=["Clave_Original", "Proveedor"], how="left")
+                df_resumen["Pagado a proveedores"] = df_resumen["Pagado a proveedores"].fillna(0)
+            else:
+                df_resumen["Pagado a proveedores"] = 0.0
+    
+            if "Pagos a realizar" not in df_resumen.columns:
+                df_resumen["Pagos a realizar"] = 0.0
+            
+            df_resumen["Saldo pendiente"] = df_resumen["Pagos a realizar"] - df_resumen["Pagado a proveedores"]
+    
+            def semaforo_saldo(row):
+                pago, abono, saldo = row["Pagos a realizar"], row["Pagado a proveedores"], row["Saldo pendiente"]
+                pct = abono / pago if pago > 0 else 1.0
+                saldo_str = f"${saldo:,.2f}"
+                if pct <= 0.35: return f"🔴 {saldo_str}"
+                elif pct < 0.80: return f"🟡 {saldo_str}"
+                else: return f"🟢 {saldo_str}"
+    
+            for col in ["Ingreso", "Pagos a realizar", "Pagado a proveedores"]:
+                df_resumen[col + "_str"] = df_resumen[col].apply(lambda x: f"${x:,.2f}")
+            df_resumen["Saldo pendiente_str"] = df_resumen.apply(semaforo_saldo, axis=1)
+    
+            for c in CUENTAS:
+                df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
+                if df_cuenta.empty: continue
+                ingreso = df_cuenta.iloc[0]["Ingreso"]
+                total_pago = df_cuenta["Pagos a realizar"].sum()
+                total_abono = df_cuenta["Pagado a proveedores"].sum()
+                total_saldo = df_cuenta["Saldo pendiente"].sum()
+                
+                bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
+                logo_banco = "👤" # Emoji unificado para todos los usuarios/cuentas por solicitud
+                pct_str = f"({(total_abono/total_pago)*100:.0f}%)" if total_pago > 0 else "(0%)"
+                estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
+                
+                def pad_nbsp(text, length):
+                    return str(text) + ("\u00A0" * max(0, length - len(str(text))))
         
-        if not filas_resumen:
-            df_resumen = pd.DataFrame(columns=["Nombre", "Cuenta", "Clave_Original", "Ingreso", "Proveedor", "Porcentaje", "Pagos a realizar"])
-        else:
-            df_resumen = pd.DataFrame(filas_resumen)
-    
-        if not df_historial.empty:
-            df_historial["Monto Total"] = pd.to_numeric(df_historial["Monto Total"], errors='coerce').fillna(0)
-            pagos_agrupados = df_historial.groupby(["Cuenta", "Proveedor"])["Monto Total"].sum().reset_index()
-            pagos_agrupados.rename(columns={"Monto Total": "Pagado a proveedores", "Cuenta": "Clave_Original"}, inplace=True)
-            df_resumen = pd.merge(df_resumen, pagos_agrupados, on=["Clave_Original", "Proveedor"], how="left")
-            df_resumen["Pagado a proveedores"] = df_resumen["Pagado a proveedores"].fillna(0)
-        else:
-            df_resumen["Pagado a proveedores"] = 0.0
-    
-        if "Pagos a realizar" not in df_resumen.columns:
-            df_resumen["Pagos a realizar"] = 0.0
-        
-        df_resumen["Saldo pendiente"] = df_resumen["Pagos a realizar"] - df_resumen["Pagado a proveedores"]
-    
-        def semaforo_saldo(row):
-            pago, abono, saldo = row["Pagos a realizar"], row["Pagado a proveedores"], row["Saldo pendiente"]
-            pct = abono / pago if pago > 0 else 1.0
-            saldo_str = f"${saldo:,.2f}"
-            if pct <= 0.35: return f"🔴 {saldo_str}"
-            elif pct < 0.80: return f"🟡 {saldo_str}"
-            else: return f"🟢 {saldo_str}"
-    
-        for col in ["Ingreso", "Pagos a realizar", "Pagado a proveedores"]:
-            df_resumen[col + "_str"] = df_resumen[col].apply(lambda x: f"${x:,.2f}")
-        df_resumen["Saldo pendiente_str"] = df_resumen.apply(semaforo_saldo, axis=1)
-    
-        for c in CUENTAS:
-            df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
-            if df_cuenta.empty: continue
-            ingreso = df_cuenta.iloc[0]["Ingreso"]
-            total_pago = df_cuenta["Pagos a realizar"].sum()
-            total_abono = df_cuenta["Pagado a proveedores"].sum()
-            total_saldo = df_cuenta["Saldo pendiente"].sum()
-            
-            bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
-            logo_banco = "🏦" if "BBVA" in c else ("💳" if "Santander" in c else ("🏛️" if "Banamex" in c else "👤"))
-            pct_str = f"({(total_abono/total_pago)*100:.0f}%)" if total_pago > 0 else "(0%)"
-            estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
-            
-            # Formateo tipo tabla usando una fuente más pequeña y etiquetas cortas
-            def pad_nbsp(text, length):
-                return str(text) + ("\u00A0" * max(0, length - len(str(text))))
-    
-            nombre_col = pad_nbsp(f"{logo_banco} {c}", 46)
-            monto_ing_col = pad_nbsp(f"Ing: ${ingreso:,.0f}", 16)
-            monto_pag_col = pad_nbsp(f"Pag: ${total_abono:,.0f}", 15)
-            monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
-            
-            titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col} | {monto_sal_col}"
-            
-            with st.expander(titulo_expander, expanded=True):
-                df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
-                df_disp.rename(columns={
-                    "Pagos a realizar_str": "Pagado a Realizar", 
-                    "Pagado a proveedores_str": "Pagado a proveedores", 
-                    "Saldo pendiente_str": "Saldo pendiente"
-                }, inplace=True)
-                st.dataframe(df_disp.style.apply(lambda x: pd.DataFrame(f'background-color: {bg_color}', index=x.index, columns=x.columns), axis=None), use_container_width=True, hide_index=True)
+                nombre_col = pad_nbsp(f"{logo_banco} {c}", 46)
+                monto_ing_col = pad_nbsp(f"Ing: ${ingreso:,.0f}", 16)
+                monto_pag_col = pad_nbsp(f"Pag: ${total_abono:,.0f}", 15)
+                monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
+                
+                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col} | {monto_sal_col}"
+                
+                with st.expander(titulo_expander, expanded=False):
+                    df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
+                    df_disp.rename(columns={
+                        "Pagos a realizar_str": "Pago a Realizar", 
+                        "Pagado a proveedores_str": "Pagado a proveedores", 
+                        "Saldo pendiente_str": "Saldo pendiente"
+                    }, inplace=True)
+                    st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
 
 if is_editor:
     # 5. GESTIÓN DE PROVEEDORES
-    st.header("⚙️ Gestión de Proveedores", divider="gray")
-    with st.expander(" Panel de Configuración de Proveedores", expanded=st.session_state.config_panel_open):
-        st.write("Registra proveedores y ajusta sus porcentajes por cliente.")
-        if "provs_temp" not in st.session_state:
-            st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
+    with st.container(border=True):
+        # Franjita rosa para gestión
+        st.markdown('<div style="background-color: #e11d48; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
-        h1, h2, h3 = st.columns([4, 2, 1])
-        h1.markdown("**Nombre del Proveedor**")
-        h2.markdown("**Estado**")
-        for i, p in enumerate(st.session_state.provs_temp):
-            c1, c2, c3 = st.columns([4, 2, 1])
-            with c1: p["Nombre"] = st.text_input("Nombre", value=p["Nombre"], key=f"n_{i}", label_visibility="collapsed")
-            with c2: p["Visible"] = st.checkbox("Activo", value=bool(p["Visible"]), key=f"v_{i}")
-            with c3:
-                if st.button("🗑", key=f"del_{i}"):
-                    st.session_state.provs_temp.pop(i)
-                    st.session_state.config_panel_open = True
-                    st.rerun()
-        if st.button("➕ Nuevo Proveedor"):
-            nuevo_p = {"Nombre": "", "Visible": True}
-            for c in CUENTAS: nuevo_p[c] = 0.0
-            st.session_state.provs_temp.append(nuevo_p)
-            st.session_state.config_panel_open = True
-            st.rerun()
-        st.divider()
-        st.markdown("### 🔧 Ajustes por Cuenta")
-        prov_activos = [p for p in st.session_state.provs_temp if p["Visible"] and p["Nombre"].strip() != ""]
-        for c_idx, c_name in enumerate(CUENTAS):
-            suma_actual = sum([float(p.get(c_name, 0.0)) for p in prov_activos])
-            estado = "✅ Suma 100%" if abs(suma_actual - 100.0) <= 0.01 else f"⚠️ Suma {suma_actual}%"
-            with st.popover(f"👤 {c_name} — {estado}", use_container_width=False):
-                if not prov_activos: st.warning("No hay proveedores activos.")
-                else:
-                    for p_idx, p in enumerate(st.session_state.provs_temp):
-                        if p["Visible"] and p["Nombre"].strip() != "":
-                            r1, r2 = st.columns([3, 2])
-                            with r1: is_sel = st.checkbox(p["Nombre"], value=(float(p.get(c_name, 0.0)) > 0), key=f"chk_{c_idx}_{p_idx}")
-                            with r2: 
-                                if is_sel: p[c_name] = st.number_input("%", value=float(p.get(c_name, 0.0)), step=1.0, min_value=0.0, max_value=100.0, key=f"val_{c_idx}_{p_idx}", label_visibility="collapsed")
-                                else: p[c_name] = 0.0
-        if st.button("💾 Guardar Configuración Final", type="primary", use_container_width=False):
-            df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-            if any(abs(df_prov_val[df_prov_val["Visible"] == True][c].sum() - 100.0) > 0.01 for c in CUENTAS):
-                st.error("Todas las cuentas deben sumar 100%.")
-                st.session_state.config_panel_open = True
-            else:
-                with st.spinner("Guardando en la base de datos..."):
-                    if guardar_config_db(df_prov_val):
-                        st.session_state.proveedores_df = df_prov_val
-                        st.session_state.pop("provs_temp", None)
-                        st.session_state.config_panel_open = False
-                        st.toast("✅ Configuración guardada con éxito")
-                        st.success("✅ Configuración guardada exitosamente.")
-                        st.rerun()
-                    else:
-                        st.error("❌ Error al guardar en Google Sheets. Intenta de nuevo.")
+        with st.expander("Panel de Configuración de Proveedores", expanded=st.session_state.config_panel_open):
+            st.write("Registra proveedores y ajusta sus porcentajes por cliente.")
+            if "provs_temp" not in st.session_state:
+                st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
+            
+            h1, h2, h3 = st.columns([4, 2, 1])
+            h1.markdown("**Nombre del Proveedor**")
+            h2.markdown("**Estado**")
+            for i, p in enumerate(st.session_state.provs_temp):
+                c1, c2, c3 = st.columns([4, 2, 1])
+                with c1: p["Nombre"] = st.text_input("Nombre", value=p["Nombre"], key=f"n_{i}", label_visibility="collapsed")
+                with c2: p["Visible"] = st.checkbox("Activo", value=bool(p["Visible"]), key=f"v_{i}")
+                with c3:
+                    if st.button("🗑", key=f"del_{i}"):
+                        st.session_state.provs_temp.pop(i)
                         st.session_state.config_panel_open = True
+                        st.rerun()
+            if st.button("➕ Nuevo Proveedor"):
+                nuevo_p = {"Nombre": "", "Visible": True}
+                for c in CUENTAS: nuevo_p[c] = 0.0
+                st.session_state.provs_temp.append(nuevo_p)
+                st.session_state.config_panel_open = True
+                st.rerun()
+            st.divider()
+            st.markdown("### 🔧 Ajustes por Cuenta")
+            prov_activos = [p for p in st.session_state.provs_temp if p["Visible"] and p["Nombre"].strip() != ""]
+            for c_idx, c_name in enumerate(CUENTAS):
+                suma_actual = sum([float(p.get(c_name, 0.0)) for p in prov_activos])
+                estado = "✅ Suma 100%" if abs(suma_actual - 100.0) <= 0.01 else f"⚠️ Suma {suma_actual}%"
+                with st.popover(f"👤 {c_name} — {estado}", use_container_width=False):
+                    if not prov_activos: st.warning("No hay proveedores activos.")
+                    else:
+                        for p_idx, p in enumerate(st.session_state.provs_temp):
+                            if p["Visible"] and p["Nombre"].strip() != "":
+                                r1, r2 = st.columns([3, 2])
+                                with r1: is_sel = st.checkbox(p["Nombre"], value=(float(p.get(c_name, 0.0)) > 0), key=f"chk_{c_idx}_{p_idx}")
+                                with r2: 
+                                    if is_sel: p[c_name] = st.number_input("%", value=float(p.get(c_name, 0.0)), step=1.0, min_value=0.0, max_value=100.0, key=f"val_{c_idx}_{p_idx}", label_visibility="collapsed")
+                                    else: p[c_name] = 0.0
+            if st.button("💾 Guardar Configuración Final", type="primary", use_container_width=False):
+                df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                if any(abs(df_prov_val[df_prov_val["Visible"] == True][c].sum() - 100.0) > 0.01 for c in CUENTAS):
+                    st.error("Todas las cuentas deben sumar 100%.")
+                    st.session_state.config_panel_open = True
+                else:
+                    with st.spinner("Guardando en la base de datos..."):
+                        if guardar_config_db(df_prov_val):
+                            st.session_state.proveedores_df = df_prov_val
+                            st.session_state.pop("provs_temp", None)
+                            st.session_state.config_panel_open = False
+                            st.toast("✅ Configuración guardada con éxito")
+                            st.success("✅ Configuración guardada exitosamente.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al guardar en Google Sheets. Intenta de nuevo.")
+                            st.session_state.config_panel_open = True
 
 
 
