@@ -1520,10 +1520,13 @@ if is_editor:
                 # He aumentado el padding a 60 y uso espacio normal para monospace.
                 # Con fuente Monospace y white-space: pre, cada caracter mide exactamente lo mismo.
                 def pad_mono(text, length):
-                    return str(text).ljust(length)
+                    t = str(text)
+                    if len(t) > length:
+                        return t[:length-3] + "..."
+                    return t.ljust(length)
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 32) # Reducido a 32 para evitar cualquier recorte
+                nombre_col = pad_mono(nombre_raw, 35) # Longitud fija reforzada para alineación perfecta
                 monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 12)
                 monto_pag_col = f"Pag: ${total_abono:,.0f}" # Sin padding por ser el final de línea
                 monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
