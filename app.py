@@ -107,13 +107,6 @@ st.markdown("""
         width: 100% !important;
         border: none !important;
     }
-    th, td {
-        padding: 2px 5px !important; /* Mínimo espacio posible */
-        text-align: center !important;
-        border: 1px solid #E5E7EB !important;
-        font-size: 0.72rem !important; /* Letra miniatura pero legible */
-        line-height: 1.1 !important; /* Comprimir altura de texto */
-    }
     /* Quitar fondo de los iframes de componentes */
     iframe {
         background: transparent !important;
@@ -138,6 +131,13 @@ st.markdown("""
     div:has(> .element-container #historial-retornos) + div [data-testid="stExpanderHeader"] p {
         text-align: center !important;
         width: 100% !important;
+        [data-testid="stTable"] th, [data-testid="stTable"] td {
+            text-align: center !important;
+            padding: 0.4rem 0.5rem !important; /* Reducido de 1.25rem para compactar */
+            vertical-align: middle !important;
+            font-size: 0.88rem !important; /* Más pequeño para reporte ejecutivo */
+            color: #1F2937 !important;
+        }
         display: block !important;
         color: #364350 !important;
         font-weight: 800 !important;
