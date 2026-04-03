@@ -34,11 +34,11 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* v3.5 - Diseño final alineado: Nombre completo, Ing, Pag y Sal en una fila */
+    /* v3.6 - Forzado de actualización total: Nombre, Ing, PAGO y Sal */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary p * {
         font-family: 'Roboto Mono', 'Courier New', monospace !important;
-        font-size: 0.8rem !important; 
+        font-size: 0.78rem !important; 
         font-weight: 800 !important;
         color: #000000 !important;
         background-color: transparent !important;
@@ -1523,13 +1523,13 @@ if is_editor:
                     return str(text).ljust(length)
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 50) # Aumentado para mostrar nombre completo impecable
-                monto_ing_col = f"Ing:${ingreso:,.0f}"
-                monto_pag_col = f"Pag:${total_abono:,.0f}"
-                monto_sal_col = f"Sal:{estado_saldo}${total_saldo:,.0f}"
+                nombre_col = pad_mono(nombre_raw, 48) # Ajuste final de ancho
+                m_ing = f"Ing:${ingreso:,.0f}"
+                m_pag = f"PAGO:${total_abono:,.0f}"
+                m_sal = f"Sal:{estado_saldo}${total_saldo:,.0f}"
                 
-                # Diseño definitivo de UNA SOLA LÍNEA completa: Nombre | Ing | Pag | Sal
-                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col} | {monto_sal_col}"
+                # Refresco forzado de cadena: Nombre | Ing | PAGO | Sal
+                titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
                 
                 with st.expander(titulo_expander, expanded=False):
                     df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
