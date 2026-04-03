@@ -34,7 +34,7 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* v3.1 - Corrección final: Estilo quirúrgico para el texto del título */
+    /* v3.2 - Corrección final: Estilo quirúrgico para el texto del título y alineación perfecta */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary p * {
         font-family: 'Roboto Mono', 'Courier New', monospace !important;
@@ -44,6 +44,7 @@ st.markdown("""
         background-color: transparent !important;
         line-height: inherit !important;
         display: inline !important;
+        white-space: pre !important; /* Garantiza alineación de columnas */
     }
     
     /* Ocultar cualquier residuo de texto interno del sistema */
@@ -1517,13 +1518,13 @@ if is_editor:
                 estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
                 
                 # He aumentado el padding a 60 y uso espacio normal para monospace.
-                # Con fuente Monospace, cada caracter mide exactamente lo mismo.
+                # Con fuente Monospace y white-space: pre, cada caracter mide exactamente lo mismo.
                 def pad_mono(text, length):
-                    return str(text).ljust(length).replace(" ", "\u00A0")
+                    return str(text).ljust(length)
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 40) # Reducido de 48 a 40 para evitar recorte
-                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 12) # Reducido de 15 a 12
+                nombre_col = pad_mono(nombre_raw, 32) # Reducido a 32 para evitar cualquier recorte
+                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 12)
                 monto_pag_col = f"Pag: ${total_abono:,.0f}" # Sin padding por ser el final de línea
                 monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
                 
