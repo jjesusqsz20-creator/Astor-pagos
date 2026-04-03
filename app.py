@@ -4,9 +4,10 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import requests
+import extra_streamlit_components as stx
 
 # Configuración de Página
 st.set_page_config(page_title="Inside - Rol de Pagos", layout="wide", page_icon="💸")
@@ -33,14 +34,21 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* Estilo refinado para los títulos de los expansores */
-    [data-testid="stExpander"] summary p, 
-    [data-testid="stExpander"] summary span, 
-    [data-testid="stExpander"] summary div {
-        font-size: 1.1rem !important;
+    /* v3.1 - Corrección final: Estilo quirúrgico para el texto del título */
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary p * {
+        font-family: 'Roboto Mono', 'Courier New', monospace !important;
+        font-size: 1.0rem !important; /* Tamaño grande pero seguro */
         font-weight: 800 !important;
-        color: #000000 !important;
-        line-height: 1.2 !important;
+        color: #000000 !important; /* Forzado a NEGRO */
+        background-color: transparent !important;
+        line-height: inherit !important;
+        display: inline !important;
+    }
+    
+    /* Ocultar cualquier residuo de texto interno del sistema */
+    [data-testid="stExpander"] summary span[aria-hidden="true"] {
+        display: none !important;
     }
     .streamlit-expanderHeader {
         background-color: #F8FAFC !important;
@@ -104,36 +112,40 @@ st.markdown("""
         border: none !important;
     }
     /* --- ESTILOS EXCLUSIVOS PARA LOS HISTORIALES (VERDE PASTEL Y CENTRADO) --- */
-    /* Solo aplicamos esto si el expander sigue a uno de nuestros marcadores específicos */
-    div:has(> .element-container #historial-abonos) ~ div [data-testid="stExpanderHeader"],
-    div:has(> .element-container #historial-abonos) ~ div .stExpander header,
-    div:has(> .element-container #historial-abonos) ~ div summary,
-    div:has(> .element-container #historial-retornos) ~ div [data-testid="stExpanderHeader"],
-    div:has(> .element-container #historial-retornos) ~ div .stExpander header,
-    div:has(> .element-container #historial-retornos) ~ div summary {
-        background-color: #d1fae5 !important;
-        border-radius: 10px !important;
-        border: 1px solid #6ee7b7 !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-    }
-    /* Centrado del texto solo para los historiales */
-    div:has(> .element-container #historial-abonos) ~ div [data-testid="stExpanderHeader"] > div,
-    div:has(> .element-container #historial-retornos) ~ div [data-testid="stExpanderHeader"] > div {
+    /* --- CENTRADO DINÁMICO PARA HISTORIALES (Basado en IDs únicos) --- */
+    /* Target del contenedor del expansor que sigue al marcador ID */
+    div:has(> .element-container #historial-abonos) + div [data-testid="stExpander"],
+    div:has(> .element-container #historial-retornos) + div [data-testid="stExpander"] {
         width: 100% !important;
-        display: flex !important;
-        justify-content: center !important;
     }
-    div:has(> .element-container #historial-abonos) ~ div p,
-    div:has(> .element-container #historial-retornos) ~ div p {
+
+    div:has(> .element-container #historial-abonos) + div [data-testid="stExpanderHeader"],
+    div:has(> .element-container #historial-retornos) + div [data-testid="stExpanderHeader"] {
+        justify-content: center !important;
+        background-color: #F8FAFC !important;
+        border-radius: 10px !important;
+    }
+
+    div:has(> .element-container #historial-abonos) + div [data-testid="stExpanderHeader"] p,
+    div:has(> .element-container #historial-retornos) + div [data-testid="stExpanderHeader"] p {
         text-align: center !important;
         width: 100% !important;
-        color: #065f46 !important;
+        display: block !important;
+        color: #364350 !important;
         font-weight: 800 !important;
-        font-size: 1.05rem !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        font-size: 1.1rem !important;
+        font-family: inherit !important; /* Salir del modo monospace para centrar */
+    }
+    /* Aumento de tamaño GLOBAL para etiquetas de campos (Inputs y Selects) */
+    [data-testid="stNumberInput"] label p,
+    [data-testid="stSelectbox"] label p {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #1E3A8A !important;
+    }
+    /* Monospace for Tablero para alinear barras verticales */
+    .stExpander details summary p {
+        letter-spacing: -0.01rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -286,8 +298,17 @@ def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
             pass
 
 # --- CONFIGURACIÓN DE ESTADO ---
+# --- GESTIÓN DE COOKIES (SESIÓN) ---
+cookie_manager = stx.CookieManager()
+
 if "usuario_logueado" not in st.session_state:
     st.session_state.usuario_logueado = None
+
+# Intentar autologin desde cookie (Persistencia de 4 hrs)
+session_cookie = cookie_manager.get('inside_session_email')
+if st.session_state.usuario_logueado is None:
+    pass
+
 if "vista_auth" not in st.session_state:
     st.session_state.vista_auth = "login"
 if "config_panel_open" not in st.session_state:
@@ -415,6 +436,13 @@ try:
     # --- MURO DE AUTENTICACIÓN ---
     usuarios_db = obtener_usuarios_db(client)
     
+    # Lógica de Autologin con Cookie
+    if st.session_state.usuario_logueado is None and session_cookie:
+        usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == session_cookie.lower().strip()), None)
+        if usuario_encontrado:
+            st.session_state.usuario_logueado = usuario_encontrado
+            st.rerun()
+
     if st.session_state.usuario_logueado is None:
         col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
         with col_l2:
@@ -432,6 +460,9 @@ try:
                     valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
                     if valido:
                         st.session_state.usuario_logueado = valido
+                        # Guardar cookie por 4 horas
+                        expires = datetime.now() + timedelta(hours=4)
+                        cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
                         st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
                         st.rerun()
                     else:
@@ -925,6 +956,7 @@ is_factura = st.session_state.usuario_logueado.get('rol') == 'Colaborador'
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state.usuario_logueado = None
     st.session_state.vista_auth = "login"
+    cookie_manager.delete('inside_session_email')
     st.rerun()
 
 
@@ -1063,7 +1095,7 @@ if is_editor:
                 st.session_state.ingreso_mensual = monto_nuevo
                 guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_nuevo)
             
-            st.number_input(f"Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
+            st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
                             step=1000.0, key="ing_input", on_change=update_ingreso_persistente)
             nuevo_ingreso = st.session_state.ingreso_mensual
     
@@ -1099,7 +1131,7 @@ if is_editor:
             def update_pago():
                 st.session_state.monto_pago_val = st.session_state.pago_input
             
-            st.number_input(f"Monto del Pago (${st.session_state.pago_input:,.2f} MXN)", 
+            st.number_input(f"💰 Monto del Pago (${st.session_state.pago_input:,.2f} MXN)", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago)
             monto_ingresado = st.session_state.monto_pago_val
@@ -1157,43 +1189,48 @@ if is_editor:
                 registros_recientes['Banco_Filtro'] = registros_recientes['Cuenta'].astype(str).apply(lambda x: x.split(" (")[1].replace(")", "") if " (" in x else "")
                 
                 st.markdown("##### 🔍 Filtros de Búsqueda")
-                f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
+                with st.form("form_filtros_abonos"):
+                    f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
+                    
+                    with f_col1:
+                        lista_users = ["Todos"] + sorted(registros_recientes["Registrado por"].dropna().astype(str).unique().tolist())
+                        sel_user = st.selectbox("Usuario", lista_users, key="f_user_abono")
+                    with f_col2:
+                        f_tk = st.text_input("Ticket", key="f_tk_abono", placeholder="Buscar...")
+                    with f_col3:
+                        f_fecha = st.date_input("Fecha", value=None, key="f_fecha_abono")
+                    with f_col4:
+                        lista_cuentas = ["Todas"] + sorted(registros_recientes['Nombre_Filtro'].dropna().unique().tolist())
+                        sel_cuenta = st.selectbox("Titular", lista_cuentas, key="f_cta_abono")
+                    with f_col5:
+                        lista_bancos = ["Todos"] + sorted([b for b in registros_recientes['Banco_Filtro'].dropna().unique().tolist() if b])
+                        sel_banco = st.selectbox("Banco", lista_bancos, key="f_bco_abono")
+                    with f_col6:
+                        lista_provs = ["Todos"] + sorted(registros_recientes['Proveedor'].dropna().unique().tolist())
+                        sel_prov = st.selectbox("Proveedor", lista_provs, key="f_prov_abono")
+                    
+                    st.form_submit_button("🔍 Buscar en Historial", use_container_width=True)
+
+                # Aplicar filtrado basado en los widgets del formulario
                 df_filtrado = registros_recientes.copy()
-                
-                with f_col1:
-                    lista_users = ["Todos"] + sorted(df_filtrado["Registrado por"].dropna().astype(str).unique().tolist())
-                    sel_user = st.selectbox("Usuario", lista_users, key="f_user_abono")
-                    if sel_user != "Todos": df_filtrado = df_filtrado[df_filtrado["Registrado por"] == sel_user]
-                with f_col2:
-                    f_tk = st.text_input("Ticket", key="f_tk_abono", placeholder="Buscar...")
-                    if f_tk: df_filtrado = df_filtrado[df_filtrado['Ticket'].astype(str).str.contains(f_tk, case=False)]
-                with f_col3:
-                    f_fecha = st.date_input("Fecha", value=None, key="f_fecha_abono")
-                    if f_fecha: df_filtrado = df_filtrado[df_filtrado['Fecha_DT'].dt.date == f_fecha]
-                with f_col4:
-                    lista_cuentas = ["Todas"] + sorted(df_filtrado['Nombre_Filtro'].dropna().unique().tolist())
-                    sel_cuenta = st.selectbox("Titular", lista_cuentas, key="f_cta_abono")
-                    if sel_cuenta != "Todas": df_filtrado = df_filtrado[df_filtrado['Nombre_Filtro'] == sel_cuenta]
-                with f_col5:
-                    lista_bancos = ["Todos"] + sorted([b for b in df_filtrado['Banco_Filtro'].dropna().unique().tolist() if b])
-                    sel_banco = st.selectbox("Banco", lista_bancos, key="f_bco_abono")
-                    if sel_banco != "Todos": df_filtrado = df_filtrado[df_filtrado['Banco_Filtro'] == sel_banco]
-                with f_col6:
-                    lista_provs = ["Todos"] + sorted(df_filtrado['Proveedor'].dropna().unique().tolist())
-                    sel_prov = st.selectbox("Proveedor", lista_provs, key="f_prov_abono")
-                    if sel_prov != "Todos": df_filtrado = df_filtrado[df_filtrado['Proveedor'] == sel_prov]
+                if sel_user != "Todos": df_filtrado = df_filtrado[df_filtrado["Registrado por"] == sel_user]
+                if f_tk: df_filtrado = df_filtrado[df_filtrado['Ticket'].astype(str).str.contains(f_tk, case=False)]
+                if f_fecha: df_filtrado = df_filtrado[df_filtrado['Fecha_DT'].dt.date == f_fecha]
+                if sel_cuenta != "Todas": df_filtrado = df_filtrado[df_filtrado['Nombre_Filtro'] == sel_cuenta]
+                if sel_banco != "Todos": df_filtrado = df_filtrado[df_filtrado['Banco_Filtro'] == sel_banco]
+                if sel_prov != "Todos": df_filtrado = df_filtrado[df_filtrado['Proveedor'] == sel_prov]
                         
                 st.divider()
                 # Pesos de columna sincronizados para cabecera y filas
                 COL_PESOS = [0.6, 0.9, 1.8, 1.2, 0.9, 1.4]
                 
                 c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
-                c_tk.markdown("<p style='text-align: center; margin: 0;'><b>Ticket</b></p>", unsafe_allow_html=True)
-                c_f.markdown("<p style='text-align: center; margin: 0;'><b>Fecha</b></p>", unsafe_allow_html=True)
-                c_c.markdown("<p style='text-align: center; margin: 0;'><b>Cuenta</b></p>", unsafe_allow_html=True)
-                c_p.markdown("<p style='text-align: center; margin: 0;'><b>Proveedor</b></p>", unsafe_allow_html=True)
-                c_m.markdown("<p style='text-align: center; margin: 0;'><b>Monto</b></p>", unsafe_allow_html=True)
-                c_u.markdown("<p style='text-align: center; margin: 0;'><b>Usuario</b></p>", unsafe_allow_html=True)
+                c_tk.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Ticket</b></p>", unsafe_allow_html=True)
+                c_f.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Fecha</b></p>", unsafe_allow_html=True)
+                c_c.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Cuenta</b></p>", unsafe_allow_html=True)
+                c_p.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Proveedor</b></p>", unsafe_allow_html=True)
+                c_m.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Monto</b></p>", unsafe_allow_html=True)
+                c_u.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Usuario</b></p>", unsafe_allow_html=True)
                 st.divider()
                 
                 if df_filtrado.empty: st.info("No se encontraron registros.")
@@ -1203,12 +1240,12 @@ if is_editor:
                         # Contenedor con borde para cada ticket
                         with st.container(border=True):
                             c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
-                            c_tk.markdown(f"<p style='text-align: center; margin: 0;'>🎫 <b>{t_id}</b></p>", unsafe_allow_html=True)
-                            c_f.markdown(f"<p style='text-align: center; margin: 0;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_c.markdown(f"<p style='text-align: center; margin: 0;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
-                            c_u.markdown(f"<p style='text-align: center; margin: 0;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
+                            c_tk.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🎫 <b>{t_id}</b></p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
+                            c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
                             
                             with st.popover("✏️ Editar Ticket", use_container_width=True):
                                     # Seccion de Edicion
@@ -1257,7 +1294,7 @@ if is_editor or is_factura:
         def update_retorno():
             st.session_state.monto_retorno_val = st.session_state.ret_input_monto
             
-        monto_r = st.number_input(f"Monto del Retorno Entregado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
+        monto_r = st.number_input(f"🔄 Monto del Retorno Entregado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
                                   min_value=0.0, step=100.0, 
                                   key="ret_input_monto", on_change=update_retorno)
         
@@ -1286,30 +1323,35 @@ if is_editor or is_factura:
                 m_recientes['Mes_Filtro'] = m_recientes['Fecha_DT'].dt.month.map(MESES_MAP)
                 
                 st.markdown("##### 🔍 Filtros de Búsqueda")
-                fm_col1, fm_col2, fm_col3 = st.columns(3)
+                with st.form("form_filtros_retornos"):
+                    fm_col1, fm_col2, fm_col3 = st.columns(3)
+                    
+                    with fm_col1:
+                        lista_users_m = ["Todos"] + sorted(m_recientes["Registrado por"].dropna().astype(str).unique().tolist())
+                        sel_user_m = st.selectbox("Usuario", lista_users_m, key="f_user_m")
+                    with fm_col2:
+                        f_tk_m = st.text_input("Ticket", key="f_tk_m", placeholder="Buscar...")
+                    with fm_col3:
+                        f_fecha_m = st.date_input("Fecha", value=None, key="f_fecha_m")
+                    
+                    st.form_submit_button("🔍 Buscar en Historial", use_container_width=True)
+
+                # Aplicar filtrado basado en los widgets del formulario
                 df_m_filtrado = m_recientes.copy()
-                
-                with fm_col1:
-                    lista_users_m = ["Todos"] + sorted(df_m_filtrado["Registrado por"].dropna().astype(str).unique().tolist())
-                    sel_user_m = st.selectbox("Usuario", lista_users_m, key="f_user_m")
-                    if sel_user_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado["Registrado por"] == sel_user_m]
-                with fm_col2:
-                    f_tk_m = st.text_input("Ticket", key="f_tk_m", placeholder="Buscar...")
-                    if f_tk_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Ticket'].astype(str).str.contains(f_tk_m, case=False)]
-                with fm_col3:
-                    f_fecha_m = st.date_input("Fecha", value=None, key="f_fecha_m")
-                    if f_fecha_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Fecha_DT'].dt.date == f_fecha_m]
+                if sel_user_m != "Todos": df_m_filtrado = df_m_filtrado[df_m_filtrado["Registrado por"] == sel_user_m]
+                if f_tk_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Ticket'].astype(str).str.contains(f_tk_m, case=False)]
+                if f_fecha_m: df_m_filtrado = df_m_filtrado[df_m_filtrado['Fecha_DT'].dt.date == f_fecha_m]
                         
                 st.divider()
                 # Pesos de columna sincronizados para cabecera y filas
                 CM_PESOS = [0.6, 0.9, 2.2, 1.0, 0.8]
                 
                 cm_tk, cm_f, cm_p, cm_m, cm_e = st.columns(CM_PESOS)
-                cm_tk.markdown("<p style='text-align: center; margin: 0;'><b>Ticket</b></p>", unsafe_allow_html=True)
-                cm_f.markdown("<p style='text-align: center; margin: 0;'><b>Fecha</b></p>", unsafe_allow_html=True)
-                cm_p.markdown("<p style='text-align: center; margin: 0;'><b>Registrado por</b></p>", unsafe_allow_html=True)
-                cm_m.markdown("<p style='text-align: center; margin: 0;'><b>Monto</b></p>", unsafe_allow_html=True)
-                cm_e.markdown("<p style='text-align: center; margin: 0;'><b>Acción</b></p>", unsafe_allow_html=True)
+                cm_tk.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Ticket</b></p>", unsafe_allow_html=True)
+                cm_f.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Fecha</b></p>", unsafe_allow_html=True)
+                cm_p.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Registrado por</b></p>", unsafe_allow_html=True)
+                cm_m.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Monto</b></p>", unsafe_allow_html=True)
+                cm_e.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Acción</b></p>", unsafe_allow_html=True)
                 st.divider()
                 
                 if df_m_filtrado.empty: st.info("No se encontraron registros.")
@@ -1318,10 +1360,10 @@ if is_editor or is_factura:
                         tm_id = str(row.get('Ticket', '---'))
                         with st.container(border=True):
                             c_tk, c_f, c_p, c_m, c_e = st.columns(CM_PESOS)
-                            c_tk.markdown(f"<p style='text-align: center; margin: 0;'>🎫 <b>{tm_id}</b></p>", unsafe_allow_html=True)
-                            c_f.markdown(f"<p style='text-align: center; margin: 0;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
+                            c_tk.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🎫 <b>{tm_id}</b></p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
                             
                             with c_e:
                                 with st.popover("✏️ Editar", use_container_width=True):
@@ -1382,12 +1424,13 @@ if is_editor:
                     sum_dif_inside += total_dif_inside
                     sum_ret_pagar_bruto += retorno_auto_bruto
                     
+                    sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
                     resumen_ret_dash.append({
                         "Nombre": nombre_c,
                         "Cuenta": banco_c,
                         "Pago Total a Proveedor": f"${total_monto_prov:,.2f}",
                         "Diferencia Inside": f"${total_dif_inside:,.2f}",
-                        "Retorno por pagar (Auto)": f"${retorno_auto_bruto:,.2f}"
+                        "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"
                     })
                 
                 df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
@@ -1467,15 +1510,19 @@ if is_editor:
                 pct_str = f"({(total_abono/total_pago)*100:.0f}%)" if total_pago > 0 else "(0%)"
                 estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
                 
-                def pad_nbsp(text, length):
-                    return str(text) + ("\u00A0" * max(0, length - len(str(text))))
+                # He aumentado el padding a 60 y uso espacio normal para monospace.
+                # Con fuente Monospace, cada caracter mide exactamente lo mismo.
+                def pad_mono(text, length):
+                    return str(text).ljust(length).replace(" ", "\u00A0")
         
-                nombre_col = pad_nbsp(f"{logo_banco} {c}", 46)
-                monto_ing_col = pad_nbsp(f"Ing: ${ingreso:,.0f}", 16)
-                monto_pag_col = pad_nbsp(f"Pag: ${total_abono:,.0f}", 15)
+                nombre_raw = f"{logo_banco} {c}"
+                nombre_col = pad_mono(nombre_raw, 48) # Reducido de 52 a 48
+                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 15)
+                monto_pag_col = pad_mono(f"Pag: ${total_abono:,.0f}", 15)
                 monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
                 
-                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col} | {monto_sal_col}"
+                # Diseño de dos líneas: Superior para Info/Pagos, Inferior para Saldo
+                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col}  \n{monto_sal_col}"
                 
                 with st.expander(titulo_expander, expanded=False):
                     df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
@@ -1494,61 +1541,125 @@ if is_editor:
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
         with st.expander("Panel de Configuración de Proveedores", expanded=st.session_state.config_panel_open):
-            st.write("Registra proveedores y ajusta sus porcentajes por cliente.")
             if "provs_temp" not in st.session_state:
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
             
-            h1, h2, h3 = st.columns([4, 2, 1])
-            h1.markdown("**Nombre del Proveedor**")
-            h2.markdown("**Estado**")
-            for i, p in enumerate(st.session_state.provs_temp):
-                c1, c2, c3 = st.columns([4, 2, 1])
-                with c1: p["Nombre"] = st.text_input("Nombre", value=p["Nombre"], key=f"n_{i}", label_visibility="collapsed")
-                with c2: p["Visible"] = st.checkbox("Activo", value=bool(p["Visible"]), key=f"v_{i}")
-                with c3:
-                    if st.button("🗑", key=f"del_{i}"):
-                        st.session_state.provs_temp.pop(i)
-                        st.session_state.config_panel_open = True
-                        st.rerun()
-            if st.button("➕ Nuevo Proveedor"):
-                nuevo_p = {"Nombre": "", "Visible": True}
-                for c in CUENTAS: nuevo_p[c] = 0.0
-                st.session_state.provs_temp.append(nuevo_p)
-                st.session_state.config_panel_open = True
-                st.rerun()
+            nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
+
+            # Callbacks para "Seleccionar Todo"
+            def toggle_all_ctas():
+                val = st.session_state.p_all_cta_check_final
+                for c in CUENTAS:
+                    st.session_state[f"p_cta_cb_fin_{c}"] = val
+
+            def toggle_all_provs():
+                val = st.session_state.p_all_prov_check_final
+                for p_item in st.session_state.provs_temp:
+                    p_name = p_item["Nombre"]
+                    if p_name.strip() != "":
+                        st.session_state[f"p_prov_cb_fin_{p_name}"] = val
+            
+            # --- FILA DE SELECCIÓN COMPACTA (POPOVERS INTEGRADOS) ---
+            col_cfg_1, col_cfg_2 = st.columns(2)
+            
+            with col_cfg_1:
+                st.markdown("**Cuentas a configurar**")
+                with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
+                    st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
+                    cuentas_seleccionadas = []
+                    for c in CUENTAS:
+                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}"):
+                            cuentas_seleccionadas.append(c)
+                if cuentas_seleccionadas:
+                    st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
+            
+            with col_cfg_2:
+                st.markdown("**Proveedores participantes**")
+                with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
+                    st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
+                    provs_seleccionados = []
+                    
+                    # Lista de proveedores con botón de borrar al lado
+                    for i, p_item in enumerate(st.session_state.provs_temp):
+                        p_name = p_item["Nombre"]
+                        if p_name.strip() == "": continue
+                        
+                        r_col1, r_col2 = st.columns([5, 1])
+                        with r_col1:
+                            if st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}"):
+                                provs_seleccionados.append(p_name)
+                        with r_col2:
+                            if st.button("🗑", key=f"btn_del_prov_int_{i}", help=f"Eliminar {p_name}"):
+                                st.session_state.provs_temp.pop(i)
+                                st.rerun()
+                    
+                    st.divider()
+                    st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
+                    f_col1, f_col2 = st.columns([4, 1])
+                    with f_col1:
+                        nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
+                    with f_col2:
+                        if st.button("➕", key="btn_add_prov_int"):
+                            if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_prov_actuales:
+                                nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
+                                for c in CUENTAS: nuevo_p[c] = 0.0
+                                st.session_state.provs_temp.append(nuevo_p)
+                                st.rerun()
+                
+                if provs_seleccionados:
+                    st.caption(f"✅ {len(provs_seleccionados)} proveedor(es) seleccionado(s)")
+            
             st.divider()
-            st.markdown("### 🔧 Ajustes por Cuenta")
-            prov_activos = [p for p in st.session_state.provs_temp if p["Visible"] and p["Nombre"].strip() != ""]
-            for c_idx, c_name in enumerate(CUENTAS):
-                suma_actual = sum([float(p.get(c_name, 0.0)) for p in prov_activos])
-                estado = "✅ Suma 100%" if abs(suma_actual - 100.0) <= 0.01 else f"⚠️ Suma {suma_actual}%"
-                with st.popover(f"👤 {c_name} — {estado}", use_container_width=False):
-                    if not prov_activos: st.warning("No hay proveedores activos.")
-                    else:
-                        for p_idx, p in enumerate(st.session_state.provs_temp):
-                            if p["Visible"] and p["Nombre"].strip() != "":
-                                r1, r2 = st.columns([3, 2])
-                                with r1: is_sel = st.checkbox(p["Nombre"], value=(float(p.get(c_name, 0.0)) > 0), key=f"chk_{c_idx}_{p_idx}")
-                                with r2: 
-                                    if is_sel: p[c_name] = st.number_input("%", value=float(p.get(c_name, 0.0)), step=1.0, min_value=0.0, max_value=100.0, key=f"val_{c_idx}_{p_idx}", label_visibility="collapsed")
-                                    else: p[c_name] = 0.0
-            if st.button("💾 Guardar Configuración Final", type="primary", use_container_width=False):
-                df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                if any(abs(df_prov_val[df_prov_val["Visible"] == True][c].sum() - 100.0) > 0.01 for c in CUENTAS):
-                    st.error("Todas las cuentas deben sumar 100%.")
-                    st.session_state.config_panel_open = True
-                else:
-                    with st.spinner("Guardando en la base de datos..."):
-                        if guardar_config_db(df_prov_val):
-                            st.session_state.proveedores_df = df_prov_val
-                            st.session_state.pop("provs_temp", None)
-                            st.session_state.config_panel_open = False
-                            st.toast("✅ Configuración guardada con éxito")
-                            st.success("✅ Configuración guardada exitosamente.")
-                            st.rerun()
+
+            # --- SECCIÓN DE PORCENTAJES (DINÁMICA) ---
+            if not cuentas_seleccionadas or not provs_seleccionados:
+                st.info("💡 Selecciona cuentas y proveedores arriba para ajustar los repartos.")
+            else:
+                # Sincronización: Poner a 0% los no seleccionados
+                for p_env in st.session_state.provs_temp:
+                    if p_env["Nombre"] not in provs_seleccionados:
+                        for c_sel in cuentas_seleccionadas:
+                            p_env[c_sel] = 0.0
+
+                st.write("**Configuración de Porcentajes** (Suma obligatoria: 100%)")
+                
+                valid_global = True
+                for c_name in cuentas_seleccionadas:
+                    with st.container(border=True):
+                        st.markdown(f"🏦 **{c_name}**")
+                        cols_prov = st.columns(len(provs_seleccionados))
+                        suma_cta = 0.0
+                        
+                        for i, p_name in enumerate(provs_seleccionados):
+                            with cols_prov[i]:
+                                p_obj = next((item for item in st.session_state.provs_temp if item["Nombre"] == p_name), None)
+                                if p_obj:
+                                    val_act = float(p_obj.get(c_name, 0.0))
+                                    p_obj[c_name] = st.number_input(f"% {p_name}", value=val_act, step=1.0, min_value=0.0, max_value=100.0, key=f"pct_{c_name}_{p_name}")
+                                    suma_cta += p_obj[c_name]
+                        
+                        # Mostrar estado de la suma
+                        if abs(suma_cta - 100.0) <= 0.01:
+                            st.success(f"✅ Suma: {suma_cta}%")
                         else:
-                            st.error("❌ Error al guardar en Google Sheets. Intenta de nuevo.")
-                            st.session_state.config_panel_open = True
+                            st.error(f"❌ Suma: {suma_cta}%")
+                            valid_global = False
+                
+                st.divider()
+                if st.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                    if not valid_global:
+                        st.error("❌ Error: Todas las cuentas seleccionadas deben sumar 100%.")
+                    else:
+                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                        with st.spinner("Sincronizando con base de datos..."):
+                            if guardar_config_db(df_prov_val):
+                                st.session_state.proveedores_df = df_prov_val
+                                st.session_state.pop("provs_temp", None)
+                                st.session_state.config_panel_open = False
+                                st.toast("✅ Configuración guardada")
+                                st.rerun()
+                            else:
+                                st.error("❌ Error al guardar.")
 
 
 
