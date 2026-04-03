@@ -1120,11 +1120,11 @@ if is_editor:
         st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
+        c1, c2, c3 = st.columns([1, 1, 1.2])
         
-        with col1:
+        with c1:
             cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
-        with col2:
+        with c2:
             prov_df = st.session_state.proveedores_df
             # Identificar columna del porcentaje para la cuenta seleccionada
             col_pct = cuenta_seleccionada
