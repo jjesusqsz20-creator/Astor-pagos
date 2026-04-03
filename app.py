@@ -107,6 +107,13 @@ st.markdown("""
         width: 100% !important;
         border: none !important;
     }
+    th, td {
+        padding: 2px 5px !important; /* Mínimo espacio posible */
+        text-align: center !important;
+        border: 1px solid #E5E7EB !important;
+        font-size: 0.72rem !important; /* Letra miniatura pero legible */
+        line-height: 1.1 !important; /* Comprimir altura de texto */
+    }
     /* Quitar fondo de los iframes de componentes */
     iframe {
         background: transparent !important;
