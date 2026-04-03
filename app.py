@@ -527,7 +527,7 @@ except Exception as e:
     st.stop()
 
 # --- FUNCIONES DE ACCESO A DATOS ---
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=60)
 def obtener_config_db():
     try:
         data = sheet_config.get_all_values()
@@ -551,7 +551,7 @@ def guardar_config_db(df_prov):
     except Exception as e:
         return False
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=60)
 def obtener_todos_ingresos_periodo():
     try:
         data = sheet_config_ingresos.get_all_records()
@@ -690,7 +690,7 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
         st.error(f"⚠️ Error cargando datos: {e}")
         return pd.DataFrame(columns=expected_cols)
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=60)
 def obtener_datos_retorno():
     """Descarga los datos de retornos desde la hoja 'Retorno'"""
     # Admitir tanto el nombre de la hoja como el estandarizado
@@ -731,7 +731,7 @@ def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno
     except Exception:
         return False
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=60)
 def obtener_datos_retorno_manual():
     """Descarga los datos de retornos manuales desde la hoja 'Retorno_Manual'"""
     # Usar 'Monto Total' para consistencia con el rename_map y otras hojas
@@ -959,6 +959,10 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     cookie_manager.delete('inside_session_email')
     st.rerun()
 
+if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+
 
 
 
@@ -1062,7 +1066,7 @@ render_metric_card(col_r2_1, "Retorno entregado", t_manual, "#10b981") # Verde
 render_metric_card(col_r2_2, f"{semaforo_m} Diferencia Proveedor", adeudo, color_adeudo) # Dinámico
 st.write("<br>", unsafe_allow_html=True)
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=60)
 def obtener_auditoria():
     cols = ["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"]
     try:
