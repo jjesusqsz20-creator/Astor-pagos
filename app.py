@@ -1568,9 +1568,9 @@ if is_editor:
             if "confirm_delete_idx" not in st.session_state:
                 st.session_state.confirm_delete_idx = None
             
-            nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
+            nombres_prov_catalogos = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
 
-            # Callbacks de Sincronización
+            # Callbacks
             def toggle_all_ctas():
                 val = st.session_state.p_all_cta_check_final
                 for c in CUENTAS: st.session_state[f"p_cta_cb_fin_{c}"] = val
@@ -1579,110 +1579,124 @@ if is_editor:
                 all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
                 st.session_state.p_all_cta_check_final = all_sel
 
-            # --- PARTE 1: CATÁLOGO DE PROVEEDORES ---
-            with st.container(border=True):
-                st.markdown("👤 **1. Catálogo de Proveedores** (Altas y Bajas)")
-                
-                f_c1, f_c2 = st.columns([3, 1])
-                with f_c1:
-                    nuevo_nombre_int = st.text_input("Nuevo proveedor", key="in_new_prov_int", placeholder="Ej: Pepsi...")
-                with f_c2:
-                    if st.button("➕ Añadir", key="btn_add_prov_int", use_container_width=True):
-                        if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_prov_actuales:
-                            nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
-                            for c in CUENTAS: nuevo_p[c] = 0.0
-                            st.session_state.provs_temp.append(nuevo_p)
-                            st.rerun()
+            def toggle_all_provs():
+                val = st.session_state.p_all_prov_check_final
+                for n in nombres_prov_catalogos: st.session_state[f"p_prov_cb_fin_{n}"] = val
 
-                st.divider()
-                for i, p_item in enumerate(st.session_state.provs_temp):
-                    p_name = p_item["Nombre"]
-                    if not p_name.strip(): continue
+            def sync_prov_master():
+                if not nombres_prov_catalogos:
+                    st.session_state.p_all_prov_check_final = False
+                    return
+                all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_prov_catalogos)
+                st.session_state.p_all_prov_check_final = all_sel
+
+            # --- PARTE 1: SELECCIÓN (COMO ESTABA) ---
+            col_cfg_1, col_cfg_2 = st.columns(2)
+            
+            with col_cfg_1:
+                st.markdown("**Cuentas a configurar**")
+                with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
+                    st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
+                    cuentas_seleccionadas = []
+                    for c in CUENTAS:
+                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_cta_master):
+                            cuentas_seleccionadas.append(c)
+            
+            with col_cfg_2:
+                st.markdown("**Proveedores participantes**")
+                with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
+                    st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
+                    provs_seleccionados = []
                     
-                    if st.session_state.confirm_delete_idx == i:
-                        with st.container(border=True):
-                            st.warning(f"¿Borrar {p_name} permanentemente?")
-                            c_c1, c_c2 = st.columns(2)
-                            with c_c1:
-                                if st.button("❌ No", key=f"can_del_{i}", use_container_width=True):
-                                    st.session_state.confirm_delete_idx = None
-                                    st.rerun()
-                            with c_c2:
-                                if st.button("✅ Sí", key=f"con_del_{i}", type="primary", use_container_width=True):
-                                    st.session_state.provs_temp.pop(i)
-                                    df_val = pd.DataFrame(st.session_state.provs_temp)
-                                    if guardar_config_db(df_val):
-                                        st.session_state.proveedores_df = df_val
+                    # Lista de catálogo con borrado
+                    for i, p_item in enumerate(st.session_state.provs_temp):
+                        p_n = p_item["Nombre"]
+                        if not p_n.strip(): continue
+                        
+                        if st.session_state.confirm_delete_idx == i:
+                            with st.container(border=True):
+                                st.warning(f"¿Borrar {p_n}?")
+                                c1, c2 = st.columns(2)
+                                with c1:
+                                    if st.button("❌ No", key=f"can_{i}"):
                                         st.session_state.confirm_delete_idx = None
-                                        st.toast(f"🗑️ {p_name} eliminado")
                                         st.rerun()
-                    else:
-                        r_c1, r_c2 = st.columns([5, 1])
-                        with r_c1: st.write(f"• **{p_name}**")
-                        with r_c2:
-                            if st.button("🗑", key=f"del_pr_{i}"):
-                                st.session_state.confirm_delete_idx = i
+                                with c2:
+                                    if st.button("✅ Sí", key=f"con_{i}"):
+                                        st.session_state.provs_temp.pop(i)
+                                        df_v = pd.DataFrame(st.session_state.provs_temp)
+                                        if guardar_config_db(df_v):
+                                            st.session_state.proveedores_df = df_v
+                                            st.session_state.confirm_delete_idx = None
+                                            st.rerun()
+                        else:
+                            r1, r2 = st.columns([4, 1])
+                            with r1:
+                                if st.checkbox(p_n, key=f"p_prov_cb_fin_{p_n}", on_change=sync_prov_master):
+                                    provs_seleccionados.append(p_n)
+                            with r2:
+                                if st.button("🗑", key=f"del_{i}"):
+                                    st.session_state.confirm_delete_idx = i
+                                    st.rerun()
+                    
+                    st.divider()
+                    st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
+                    f1, f2 = st.columns([3, 1])
+                    with f1: nuevo_p_n = st.text_input("Nombre", key="new_p_name", label_visibility="collapsed")
+                    with f2:
+                        if st.button("➕", key="add_p_btn"):
+                            if nuevo_p_n.strip() and nuevo_p_n.strip() not in nombres_prov_catalogos:
+                                nuevo_p = {"Nombre": nuevo_p_n.strip(), "Visible": True}
+                                for c in CUENTAS: nuevo_p[c] = 0.0
+                                st.session_state.provs_temp.append(nuevo_p)
                                 st.rerun()
 
             st.divider()
 
-            # --- PARTE 2: CONFIGURACIÓN POR CUENTA ---
-            st.markdown("🏦 **2. Configuración de Cuentas** (Asignación y Reparto)")
-            
-            with st.popover("📂 Seleccionar Cuentas a editar", use_container_width=True):
-                st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
-                ctas_sel = []
-                for c in CUENTAS:
-                    if st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_cta_master):
-                        ctas_sel.append(c)
-            
-            if not ctas_sel:
-                st.info("💡 Selecciona cuentas arriba para ajustar sus reparos.")
+            # --- SECCIÓN DE PORCENTAJES (ORIGINAL RESTAURADA) ---
+            if not cuentas_seleccionadas or not provs_seleccionados:
+                st.info("💡 Selecciona cuentas y proveedores arriba para ajustar los repartos.")
             else:
-                v_global = True
-                n_cat = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip()]
-
-                for c_name in ctas_sel:
-                    with st.container(border=True):
-                        st.markdown(f"🏦 **Cuenta: {c_name}**")
-                        p_pre = [p["Nombre"] for p in st.session_state.provs_temp if float(p.get(c_name, 0.0)) > 0]
-                        p_esc = st.multiselect(f"Proveedores para {c_name}", options=n_cat, default=p_pre, key=f"ms_{c_name}")
-                        
-                        if not p_esc:
-                            st.warning("⚠️ Selecciona proveedores para asignar porcentajes.")
-                            v_global = False
-                        else:
-                            for p_obj in st.session_state.provs_temp:
-                                if p_obj["Nombre"] not in p_esc: p_obj[c_name] = 0.0
-                            
-                            cols_p = st.columns(len(p_esc))
-                            suma_c = 0.0
-                            for i, p_n in enumerate(p_esc):
-                                with cols_p[i]:
-                                    obj = next((item for item in st.session_state.provs_temp if item["Nombre"] == p_n), None)
-                                    if obj:
-                                        v_a = float(obj.get(c_name, 0.0))
-                                        obj[c_name] = st.number_input(f"% {p_n}", value=v_a, step=1.0, min_value=0.0, max_value=100.0, key=f"p_{c_name}_{p_n}")
-                                        suma_c += obj[c_name]
-                            
-                            if abs(suma_c - 100.0) <= 0.01: st.success(f"✅ Suma {c_name}: {suma_c}%")
-                            else:
-                                st.error(f"❌ Suma {c_name}: {suma_c}% (Debe ser 100%)")
-                                v_global = False
+                st.write("**Configuración de Porcentajes** (Suma obligatoria: 100%)")
+                valid_global = True
                 
+                # Sincronización: los no seleccionados se ponen a 0%
+                for p_env in st.session_state.provs_temp:
+                    if p_env["Nombre"] not in provs_seleccionados:
+                        for c_sel in cuentas_seleccionadas:
+                            if c_sel in p_env: p_env[c_sel] = 0.0
+
+                for c_name in cuentas_seleccionadas:
+                    with st.container(border=True):
+                        st.markdown(f"🏦 **{c_name}**")
+                        cols_prov = st.columns(len(provs_seleccionados))
+                        suma_cta = 0.0
+                        
+                        for i, p_name in enumerate(provs_seleccionados):
+                            with cols_prov[i]:
+                                p_obj = next((item for item in st.session_state.provs_temp if item["Nombre"] == p_name), None)
+                                if p_obj:
+                                    val_act = float(p_obj.get(c_name, 0.0))
+                                    p_obj[c_name] = st.number_input(f"% {p_name}", value=val_act, step=1.0, min_value=0.0, max_value=100.0, key=f"pct_{c_name}_{p_name}")
+                                    suma_cta += p_obj[c_name]
+                        
+                        # Mostrar estado de la suma
+                        if abs(suma_cta - 100.0) <= 0.01:
+                            st.success(f"✅ Suma {c_name}: {suma_cta}%")
+                        else:
+                            st.error(f"❌ Suma {c_name}: {suma_cta}%")
+                            valid_global = False
+
                 st.divider()
                 if st.button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                    if not v_global: st.error("❌ Todas las cuentas seleccionadas deben sumar 100%.")
+                    if not valid_global: st.error("❌ Error: Todas las cuentas deben sumar 100%.")
                     else:
                         df_f = pd.DataFrame(st.session_state.provs_temp)
-                        with st.spinner("Sincronizando..."):
-                            if guardar_config_db(df_f):
-                                st.session_state.proveedores_df = df_f
-                                st.session_state.pop("provs_temp", None)
-                                st.session_state.config_panel_open = False
-                                st.toast("✅ Guardado con éxito")
-                                st.rerun()
-                            else: st.error("❌ Error al guardar.")
+                        if guardar_config_db(df_f):
+                            st.session_state.proveedores_df = df_f
+                            st.session_state.pop("provs_temp", None)
+                            st.session_state.config_panel_open = False
+                            st.rerun()
 
 
 
