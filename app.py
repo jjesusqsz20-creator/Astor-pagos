@@ -34,11 +34,11 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* v3.6 - Forzado de actualización total: Nombre, Ing, PAGO y Sal */
+    /* v3.7 - Ajuste de legibilidad: Tamaño intermedio óptimo */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary p * {
         font-family: 'Roboto Mono', 'Courier New', monospace !important;
-        font-size: 0.78rem !important; 
+        font-size: 0.92rem !important; 
         font-weight: 800 !important;
         color: #000000 !important;
         background-color: transparent !important;
