@@ -1632,24 +1632,21 @@ if is_editor:
                         with r_col2:
                             # Lógica de Confirmación de Borrado
                             if st.session_state.confirm_delete_idx == i:
-                                # Ya se presionó basurero: Mostrar Confirmación
-                                st.warning(f"¿⚠️ Borrar a {p_name} permanentemente?", icon="⚠️")
-                                col_c1, col_c2 = st.columns(2)
-                                with col_c1:
-                                    if st.button("❌ No", key=f"cancel_del_{i}", use_container_width=True):
+                                # Botones simples para evitar error de anidación de columnas
+                                if st.button("❌ Cancelar", key=f"cancel_del_{i}", use_container_width=True):
+                                    st.session_state.confirm_delete_idx = None
+                                    st.rerun()
+                                
+                                if st.button("✅ Confirmar Borrado Permanente", key=f"confirm_del_{i}", type="primary", use_container_width=True):
+                                    # Eliminar del borrador
+                                    st.session_state.provs_temp.pop(i)
+                                    # Guardar DE INMEDIATO en DB para que sea permanente
+                                    df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                                    if guardar_config_db(df_prov_val):
+                                        st.session_state.proveedores_df = df_prov_val
                                         st.session_state.confirm_delete_idx = None
+                                        st.success(f"🗑️ {p_name} eliminado.")
                                         st.rerun()
-                                with col_c2:
-                                    if st.button("✅ Sí", key=f"confirm_del_{i}", type="primary", use_container_width=True):
-                                        # Eliminar del borrador
-                                        st.session_state.provs_temp.pop(i)
-                                        # Guardar DE INMEDIATO en DB para que sea permanente
-                                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                                        if guardar_config_db(df_prov_val):
-                                            st.session_state.proveedores_df = df_prov_val
-                                            st.session_state.confirm_delete_idx = None
-                                            st.success(f"🗑️ {p_name} eliminado.")
-                                            st.rerun()
                             else:
                                 if st.button("🗑", key=f"btn_del_prov_int_{i}", help=f"Eliminar {p_name}"):
                                     st.session_state.confirm_delete_idx = i
