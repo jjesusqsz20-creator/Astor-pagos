@@ -34,11 +34,11 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* v3.4 - Una sola línea compacta y alineada */
+    /* v3.5 - Diseño final alineado: Nombre completo, Ing, Pag y Sal en una fila */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary p * {
         font-family: 'Roboto Mono', 'Courier New', monospace !important;
-        font-size: 0.92rem !important; 
+        font-size: 0.8rem !important; 
         font-weight: 800 !important;
         color: #000000 !important;
         background-color: transparent !important;
@@ -1518,21 +1518,18 @@ if is_editor:
                 estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
                 
                 # He aumentado el padding a 60 y uso espacio normal para monospace.
-                # Con fuente Monospace y white-space: pre, cada caracter mide exactamente lo mismo.
+                # Monospace + white-space: pre + font-size: 0.8rem = Alineación perfecta en una línea
                 def pad_mono(text, length):
-                    t = str(text)
-                    if len(t) > length:
-                        return t[:length-3] + "..."
-                    return t.ljust(length)
+                    return str(text).ljust(length)
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 22) # Compacto para que quepa todo en una línea
+                nombre_col = pad_mono(nombre_raw, 50) # Aumentado para mostrar nombre completo impecable
                 monto_ing_col = f"Ing:${ingreso:,.0f}"
                 monto_pag_col = f"Pag:${total_abono:,.0f}"
                 monto_sal_col = f"Sal:{estado_saldo}${total_saldo:,.0f}"
                 
-                # Diseño de UNA SOLA LÍNEA (User request): Nombre | Ing | Pag | Sal
-                titulo_expander = f"{nombre_col}|{monto_ing_col}|{monto_pag_col}|{monto_sal_col}"
+                # Diseño definitivo de UNA SOLA LÍNEA completa: Nombre | Ing | Pag | Sal
+                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col} | {monto_sal_col}"
                 
                 with st.expander(titulo_expander, expanded=False):
                     df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
