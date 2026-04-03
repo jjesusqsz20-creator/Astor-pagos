@@ -1140,7 +1140,7 @@ if is_editor:
                 proveedor_seleccionado = st.selectbox("Proveedor Destino", lista_prov_form, key=f"abono_prov_{cuenta_seleccionada}")
                 pct_actual = prov_validos[prov_validos["Nombre"] == proveedor_seleccionado][col_pct].iloc[0]
 
-        with col3:
+        with c3:
             def update_pago():
                 st.session_state.monto_pago_val = st.session_state.pago_input
             
