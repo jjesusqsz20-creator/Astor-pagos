@@ -1522,9 +1522,9 @@ if is_editor:
                     return str(text).ljust(length).replace(" ", "\u00A0")
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 48) # Reducido de 52 a 48
-                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 15)
-                monto_pag_col = pad_mono(f"Pag: ${total_abono:,.0f}", 15)
+                nombre_col = pad_mono(nombre_raw, 40) # Reducido de 48 a 40 para evitar recorte
+                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 12) # Reducido de 15 a 12
+                monto_pag_col = f"Pag: ${total_abono:,.0f}" # Sin padding por ser el final de línea
                 monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
                 
                 # Diseño de dos líneas: Superior para Info/Pagos, Inferior para Saldo
