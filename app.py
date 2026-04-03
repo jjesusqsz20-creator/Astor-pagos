@@ -304,6 +304,8 @@ cookie_manager = stx.CookieManager()
 
 if "usuario_logueado" not in st.session_state:
     st.session_state.usuario_logueado = None
+if "manual_logout" not in st.session_state:
+    st.session_state.manual_logout = False
 
 # Intentar autologin desde cookie (Persistencia de 4 hrs)
 session_cookie = cookie_manager.get('inside_session_email')
@@ -435,7 +437,8 @@ try:
     usuarios_db = obtener_usuarios_db(client)
     
     # Lógica de Autologin con Cookie (Sincronización para Streamlit Cloud)
-    if st.session_state.usuario_logueado is None:
+    # Solo intentar si el usuario no ha forzado un Logout manual en esta sesión
+    if st.session_state.usuario_logueado is None and not st.session_state.manual_logout:
         if session_cookie:
             usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == session_cookie.lower().strip()), None)
             if usuario_encontrado:
@@ -463,6 +466,7 @@ try:
                     valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
                     if valido:
                         st.session_state.usuario_logueado = valido
+                        st.session_state.manual_logout = False # Resetear bandera al loguearse
                         # Guardar cookie por 7 días
                         expires = datetime.now() + timedelta(days=7)
                         cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
@@ -959,6 +963,8 @@ is_factura = st.session_state.usuario_logueado.get('rol') == 'Colaborador'
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state.usuario_logueado = None
     st.session_state.vista_auth = "login"
+    st.session_state.manual_logout = True # Bloquear autologin hasta login manual
+    st.session_state.cookie_wait_done = False # Resetear espera de sincronización
     cookie_manager.delete('inside_session_email')
     st.rerun()
 
