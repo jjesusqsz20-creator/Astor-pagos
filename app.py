@@ -131,19 +131,21 @@ st.markdown("""
     div:has(> .element-container #historial-retornos) + div [data-testid="stExpanderHeader"] p {
         text-align: center !important;
         width: 100% !important;
-        [data-testid="stTable"] th, [data-testid="stTable"] td {
-            text-align: center !important;
-            padding: 0.4rem 0.5rem !important; /* Reducido de 1.25rem para compactar */
-            vertical-align: middle !important;
-            font-size: 0.88rem !important; /* Más pequeño para reporte ejecutivo */
-            color: #1F2937 !important;
-        }
         display: block !important;
         color: #364350 !important;
         font-weight: 800 !important;
         font-size: 1.1rem !important;
         font-family: inherit !important; /* Salir del modo monospace para centrar */
     }
+
+    [data-testid="stTable"] th, [data-testid="stTable"] td {
+        text-align: center !important;
+        padding: 0.8rem 0.8rem !important; /* Reducción del 25% aproximadamente */
+        vertical-align: middle !important;
+        font-size: 0.98rem !important;
+        color: #1F2937 !important;
+    }
+
     /* Aumento de tamaño GLOBAL para etiquetas de campos (Inputs y Selects) */
     [data-testid="stNumberInput"] label p,
     [data-testid="stSelectbox"] label p {
