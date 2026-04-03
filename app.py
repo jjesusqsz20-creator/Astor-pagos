@@ -421,9 +421,6 @@ def get_db_sheets(_client):
 try:
     client = init_connection()
     db_sheets = get_db_sheets(client)
-    # Limpieza forzada de cache para asegurar que no queden datos fantasma anteriores
-    st.cache_data.clear()
-    
     # Referencias globales para conveniencia (aunque los datos se obtengan via funciones)
     spreadsheet = db_sheets["spreadsheet"]
     sheet_config = db_sheets["config"]
@@ -436,11 +433,16 @@ try:
     # --- MURO DE AUTENTICACIÓN ---
     usuarios_db = obtener_usuarios_db(client)
     
-    # Lógica de Autologin con Cookie
-    if st.session_state.usuario_logueado is None and session_cookie:
-        usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == session_cookie.lower().strip()), None)
-        if usuario_encontrado:
-            st.session_state.usuario_logueado = usuario_encontrado
+    # Lógica de Autologin con Cookie (Sincronización para Streamlit Cloud)
+    if st.session_state.usuario_logueado is None:
+        if session_cookie:
+            usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == session_cookie.lower().strip()), None)
+            if usuario_encontrado:
+                st.session_state.usuario_logueado = usuario_encontrado
+                st.rerun()
+        # Si no hay cookie pero tampoco hemos reintentado, esperar un tick para stx.CookieManager
+        elif not st.session_state.get('cookie_wait_done', False):
+            st.session_state.cookie_wait_done = True
             st.rerun()
 
     if st.session_state.usuario_logueado is None:
@@ -460,8 +462,8 @@ try:
                     valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
                     if valido:
                         st.session_state.usuario_logueado = valido
-                        # Guardar cookie por 4 horas
-                        expires = datetime.now() + timedelta(hours=4)
+                        # Guardar cookie por 7 días
+                        expires = datetime.now() + timedelta(days=7)
                         cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
                         st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
                         st.rerun()
@@ -1551,10 +1553,16 @@ if is_editor:
             nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
 
             # Callbacks para "Seleccionar Todo"
+            # Callbacks para Sincronización de Checkboxes (Cuentas y Proveedores)
             def toggle_all_ctas():
                 val = st.session_state.p_all_cta_check_final
                 for c in CUENTAS:
                     st.session_state[f"p_cta_cb_fin_{c}"] = val
+
+            def sync_cta_master():
+                # Si todas las individuales están marcadas, marcar el master. Si falta una, desmarcar.
+                all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
+                st.session_state.p_all_cta_check_final = all_sel
 
             def toggle_all_provs():
                 val = st.session_state.p_all_prov_check_final
@@ -1562,6 +1570,15 @@ if is_editor:
                     p_name = p_item["Nombre"]
                     if p_name.strip() != "":
                         st.session_state[f"p_prov_cb_fin_{p_name}"] = val
+
+            def sync_prov_master():
+                # Obtener lista de nombres válidos actuales
+                nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""]
+                if not nombres_v:
+                    st.session_state.p_all_prov_check_final = False
+                    return
+                all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_v)
+                st.session_state.p_all_prov_check_final = all_sel
             
             # --- FILA DE SELECCIÓN COMPACTA (POPOVERS INTEGRADOS) ---
             col_cfg_1, col_cfg_2 = st.columns(2)
@@ -1572,7 +1589,7 @@ if is_editor:
                     st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
                     cuentas_seleccionadas = []
                     for c in CUENTAS:
-                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}"):
+                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_cta_master):
                             cuentas_seleccionadas.append(c)
                 if cuentas_seleccionadas:
                     st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
@@ -1590,7 +1607,7 @@ if is_editor:
                         
                         r_col1, r_col2 = st.columns([5, 1])
                         with r_col1:
-                            if st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}"):
+                            if st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_prov_master):
                                 provs_seleccionados.append(p_name)
                         with r_col2:
                             if st.button("🗑", key=f"btn_del_prov_int_{i}", help=f"Eliminar {p_name}"):
