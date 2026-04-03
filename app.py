@@ -34,11 +34,11 @@ st.markdown("""
         border: 1px solid #E5E7EB !important;
     }
 
-    /* v3.2 - Corrección final: Estilo quirúrgico para el texto del título y alineación perfecta */
+    /* v3.3 - Corrección final: Estructura de dos líneas para asegurar visibilidad total de Pagos */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary p * {
         font-family: 'Roboto Mono', 'Courier New', monospace !important;
-        font-size: 1.0rem !important; /* Tamaño grande pero seguro */
+        font-size: 0.95rem !important; /* Optimizado para dos líneas */
         font-weight: 800 !important;
         color: #000000 !important; /* Forzado a NEGRO */
         background-color: transparent !important;
@@ -1526,13 +1526,13 @@ if is_editor:
                     return t.ljust(length)
         
                 nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 35) # Longitud fija reforzada para alineación perfecta
-                monto_ing_col = pad_mono(f"Ing: ${ingreso:,.0f}", 12)
-                monto_pag_col = f"Pag: ${total_abono:,.0f}" # Sin padding por ser el final de línea
+                nombre_col = pad_mono(nombre_raw, 28) # Reducido a 28 para asegurar Fila 1 corta
+                monto_ing_col = f"Ing: ${ingreso:,.0f}"
+                monto_pag_col = pad_mono(f"Pag: ${total_abono:,.0f}", 18) # Alineado en Fila 2
                 monto_sal_col = f"Sal: {estado_saldo} ${total_saldo:,.0f} {pct_str}"
                 
-                # Diseño de dos líneas: Superior para Info/Pagos, Inferior para Saldo
-                titulo_expander = f"{nombre_col} | {monto_ing_col} | {monto_pag_col}  \n{monto_sal_col}"
+                # Diseño de dos líneas: F1 para Info, F2 para Pagos/Saldo (Asegura visibilidad total)
+                titulo_expander = f"{nombre_col} | {monto_ing_col}  \n{monto_pag_col} | {monto_sal_col}"
                 
                 with st.expander(titulo_expander, expanded=False):
                     df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
