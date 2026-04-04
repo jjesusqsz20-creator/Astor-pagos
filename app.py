@@ -309,7 +309,9 @@ def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
 
 # --- CONFIGURACIÓN DE ESTADO ---
 # --- GESTIÓN DE COOKIES (SESIÓN) ---
-cookie_manager = stx.CookieManager()
+if "cookie_manager" not in st.session_state:
+    st.session_state.cookie_manager = stx.CookieManager(key="inside_cookie_manager")
+cookie_manager = st.session_state.cookie_manager
 
 if "usuario_logueado" not in st.session_state:
     st.session_state.usuario_logueado = None
@@ -1614,7 +1616,7 @@ if is_editor:
             
             with col_cfg_1:
                 st.markdown("**Cuentas a configurar**")
-                with st.popover("📂 Seleccionar Cuentas", key="p_popover_ctas"):
+                with st.popover("📂 Seleccionar Cuentas"):
                     st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
                     cuentas_seleccionadas = []
                     for c in CUENTAS:
@@ -1625,7 +1627,7 @@ if is_editor:
             
             with col_cfg_2:
                 st.markdown("**Proveedores participantes**")
-                with st.popover("👤 Seleccionar Proveedores", key="p_popover_provs"):
+                with st.popover("👤 Seleccionar Proveedores"):
                     st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
                     provs_seleccionados = []
                     
