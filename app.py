@@ -1654,18 +1654,27 @@ if is_editor:
 
                         nombres_v = [p["Nombre"] for p in st.session_state.provs_temp]
                         
-                        def sync_all_p():
-                            val = st.session_state.master_provs
-                            for n in nombres_v:
-                                st.session_state[f"p_prov_v5_cb_{n}"] = val
+                        # --- LÓGICA REACTIVA PARA "SELECCIONAR TODOS" ---
+                        if "prev_master_provs" not in st.session_state:
+                            st.session_state.prev_master_provs = st.session_state.get("master_provs", False)
                         
+                        # Si el interruptor maestro cambió, forzamos a todos los hijos
+                        if st.session_state.get("master_provs", False) != st.session_state.prev_master_provs:
+                            new_val = st.session_state.master_provs
+                            for n in nombres_v:
+                                st.session_state[f"p_prov_v6_cb_{n}"] = new_val
+                            st.session_state.prev_master_provs = new_val
+
                         def sync_ind_p():
-                            all_sel = all(st.session_state.get(f"p_prov_v5_cb_{n}", False) for n in nombres_v)
+                            # Sincronización inversa logic para mantener el master al día
+                            all_sel = all(st.session_state.get(f"p_prov_v6_cb_{n}", False) for n in nombres_v)
                             st.session_state.master_provs = all_sel
+                            st.session_state.prev_master_provs = all_sel
 
                         st.markdown("**Proveedores participantes**")
                         if nombres_v:
-                            st.checkbox("👥 Seleccionar todos", key="master_provs", on_change=sync_all_p)
+                            # Sin on_change para que la lógica reactiva de arriba tome el mando
+                            st.checkbox("👥 Seleccionar todos", key="master_provs")
                         
                         for i, p_item in enumerate(st.session_state.provs_temp):
                             p_name = p_item["Nombre"]
@@ -1685,7 +1694,7 @@ if is_editor:
                                             df_new_v = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                             if guardar_config_db(df_new_v):
                                                 st.session_state.proveedores_df = df_new_v
-                                                st.session_state.pop(f"p_prov_v5_cb_{p_name_del}", None) # Limpiar ID v5
+                                                st.session_state.pop(f"p_prov_v6_cb_{p_name_del}", None) # Limpieza v6
                                                 st.session_state.confirm_delete_idx = None
                                                 st.toast(f"🗑️ {p_name_del} eliminado globalmente")
                                                 st.rerun()
