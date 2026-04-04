@@ -1596,27 +1596,17 @@ if is_editor:
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
         with st.expander("Panel de Configuración de Proveedores"):
-            # Sincronización robusta y DEDUPLICACIÓN
+            # Sincronización proactiva: Si proveedores_df cambió fuera, actualizar provs_temp
             if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
-            
-            # Limpieza proactiva y DEDUPLICACIÓN por nombre para evitar DuplicateWidgetID
-            temp_list = []
-            seen_names = set()
-            for p in st.session_state.provs_temp:
-                name = str(p.get("Nombre", "")).strip()
-                if name != "" and name not in seen_names:
-                    temp_list.append(p)
-                    seen_names.add(name)
-            st.session_state.provs_temp = temp_list
-            
+                
             # Estado para manejar la confirmación de eliminación y adición
             if "confirm_delete_idx" not in st.session_state:
                 st.session_state.confirm_delete_idx = None
             if "confirm_add_prov" not in st.session_state:
                 st.session_state.confirm_add_prov = False
             
-            nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
+            nombres_prov_actuales = sorted(list(set([str(p.get("Nombre", "")).strip() for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""])))
 
             # --- LÓGICA DE SINCRONIZACIÓN DINÁMICA (FRAGMENTOS) ---
             def render_popover_cuentas():
@@ -1645,7 +1635,17 @@ if is_editor:
                 with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
                     @st.fragment
                     def content_proveedores():
-                        nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""]
+                        # DEDUPLICACIÓN INTERNA: Cada vez que el menú se refresca, nos aseguramos de que no haya duplicados
+                        temp_list = []
+                        seen_names = set()
+                        for p in st.session_state.provs_temp:
+                            name = str(p.get("Nombre", "")).strip()
+                            if name != "" and name not in seen_names:
+                                temp_list.append(p)
+                                seen_names.add(name)
+                        st.session_state.provs_temp = temp_list
+
+                        nombres_v = [p["Nombre"] for p in st.session_state.provs_temp]
                         
                         def sync_all_p():
                             val = st.session_state.master_provs
@@ -1685,11 +1685,10 @@ if is_editor:
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
-                                    # Usamos un prefijo v5 único para evitar colisiones con rastros de sesiones anteriores
-                                    st.checkbox(p_name, key=f"p_prov_v5_cb_{p_name}", on_change=sync_ind_p)
+                                    # Usamos prefijo v6 para máxima seguridad contra IDs persistentes
+                                    st.checkbox(p_name, key=f"p_prov_v6_cb_{p_name}", on_change=sync_ind_p)
                                 with r_c2:
                                     if st.button("🗑", key=f"b_del_{i}"):
-                                        # EXCLUSIVIDAD: Si vamos a borrar, cancelamos cualquier intento de añadir
                                         st.session_state.confirm_add_prov = False
                                         st.session_state.confirm_delete_idx = i
                         
@@ -1718,19 +1717,24 @@ if is_editor:
                                         st.session_state.confirm_add_prov = False; st.rerun()
                                 with ca_col2:
                                     if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary"):
-                                        nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
-                                        for c in CUENTAS: nuevo_p[c] = 0.0
-                                        st.session_state.provs_temp.append(nuevo_p)
+                                        # LIMPIEZA INMEDIATA: Desactivamos la pregunta antes de procesar para evitar race conditions
+                                        st.session_state.confirm_add_prov = False
+                                        
+                                        nuevo_p_nom = nuevo_nombre_int.strip()
+                                        if nuevo_p_nom not in [str(px.get("Nombre", "")).strip() for px in st.session_state.provs_temp]:
+                                            nuevo_p = {"Nombre": nuevo_p_nom, "Visible": True}
+                                            for c in CUENTAS: nuevo_p[c] = 0.0
+                                            st.session_state.provs_temp.append(nuevo_p)
+                                            
                                         df_new_add = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                         if guardar_config_db(df_new_add):
                                             st.session_state.proveedores_df = df_new_add
-                                            st.session_state.confirm_add_prov = False
                                             st.session_state.reset_prov_idx += 1
-                                            st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
+                                            st.toast(f"✅ {nuevo_p_nom} registrado")
                                             st.rerun()
                         
-                        # Sincronización final usando el mismo ID v5
-                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != "" and st.session_state.get(f"p_prov_v5_cb_{p['Nombre']}", False)]
+                        # Sincronización final usando IDs v6
+                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != "" and st.session_state.get(f"p_prov_v6_cb_{p['Nombre']}", False)]
                     
                     content_proveedores()
             
