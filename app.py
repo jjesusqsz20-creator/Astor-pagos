@@ -1473,6 +1473,8 @@ if is_editor:
                     df_h_manual_dash = obtener_datos_retorno_manual()
                     
                     if not df_h_ret_dash.empty:
+                        # AUDITORÍA POS-FILTRADO: Solo ver retornos de los proveedores actualmente visibles
+                        df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Proveedor"].isin(prov_visibles["Nombre"])]
                         resumen_ret_dash = []
                         sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                         
@@ -1775,12 +1777,21 @@ if is_editor:
                         st.session_state.cuentas_seleccionadas_final = s_c
                         st.session_state.provs_seleccionados_final = s_p
                         st.session_state.asignacion_confirmada = True
+                        
+                        # SINCRONIZACIÓN ATÓMICA: Borrar rastro de lo que no esté seleccionado
                         for p in st.session_state.provs_temp:
-                             p["Visible"] = (p["Nombre"] in s_p)
+                            is_p_sel = (p["Nombre"] in s_p)
+                            p["Visible"] = is_p_sel
+                            
+                            for c in CUENTAS:
+                                # Si el proveedor no se seleccionó O la cuenta no se seleccionó -> 0%
+                                if not is_p_sel or c not in s_c:
+                                    p[c] = 0.0
+
                         df_v1 = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                         if guardar_config_db(df_v1):
                             st.session_state.proveedores_df = df_v1
-                            st.toast("✅ Asignación confirmada. Baja para el Paso 2."); st.rerun()
+                            st.toast("✅ Sincronización completa. Solo verás lo seleccionado."); st.rerun()
 
             prov_config_panel()
 
