@@ -29,9 +29,18 @@ st.markdown("""
     .stTextInput>div>div>input,
     .stSelectbox>div>div>div,
     .stNumberInput>div>div>input {
-        background-color: #F1F5F9 !important;
+        background-color: #F8FAFC !important;
         color: #1E3A8A !important;
-        border: 1px solid #E5E7EB !important;
+        border: 1.5px solid #CBD5E1 !important; /* Borde más pronunciado */
+        border-radius: 8px !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    /* Efecto Hover y Focus para inputs */
+    .stTextInput>div>div>input:focus,
+    .stNumberInput>div>div>input:focus {
+        border-color: #3B82F6 !important;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
     }
 
     /* v3.7 - Ajuste de legibilidad: Tamaño intermedio óptimo */
