@@ -1600,6 +1600,10 @@ if is_editor:
             if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
                 
+            # Estado para manejar el reseteo del campo de texto (debe estar fuera del fragmento para persistir)
+            if "reset_prov_idx" not in st.session_state:
+                st.session_state.reset_prov_idx = 0
+                
             # Estado para manejar la confirmación de eliminación y adición
             if "confirm_delete_idx" not in st.session_state:
                 st.session_state.confirm_delete_idx = None
@@ -1696,11 +1700,9 @@ if is_editor:
                         st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                         f_col1, f_col2 = st.columns([4, 1])
                         
-                        if "reset_prov_idx" not in st.session_state:
-                            st.session_state.reset_prov_idx = 0
-                            
                         with f_col1:
-                            nuevo_nombre_int = st.text_input("Nombre", key=f"in_new_p_dyn_{st.session_state.reset_prov_idx}", label_visibility="collapsed")
+                            # v8 garantiza un widget nuevo y vacío tras cada éxito o cancelación
+                            nuevo_nombre_int = st.text_input("Nombre", key=f"in_new_p_v8_{st.session_state.reset_prov_idx}", label_visibility="collapsed")
                         with f_col2:
                             if st.button("➕", key="btn_add_prov_int"):
                                 if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_v:
@@ -1714,7 +1716,9 @@ if is_editor:
                                 ca_col1, ca_col2 = st.columns(2)
                                 with ca_col1:
                                     if st.button("❌ No", key="cancel_add_prov"):
-                                        st.session_state.confirm_add_prov = False; st.rerun()
+                                        st.session_state.confirm_add_prov = False
+                                        st.session_state.reset_prov_idx += 1 # Limpiamos el campo al cancelar
+                                        st.rerun()
                                 with ca_col2:
                                     if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary"):
                                         # LIMPIEZA INMEDIATA: Desactivamos la pregunta antes de procesar para evitar race conditions
