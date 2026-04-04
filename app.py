@@ -458,113 +458,113 @@ except Exception as e:
     st.stop()
 
 # --- MURO DE AUTENTICACIÓN ---
-    usuarios_db = obtener_usuarios_db(client)
-    
-    # Lógica de Autologin con Cookie (Sincronización agresiva V3)
-    # Solo intentar si el usuario no ha forzado un Logout manual en esta sesión
-    if st.session_state.usuario_logueado is None and not st.session_state.manual_logout:
-        # Forzar sincronización de cookies
-        try:
-            cookies = cookie_manager.get_all()
-            if cookies and 'inside_session_email' in cookies:
-                email_c = str(cookies['inside_session_email']).lower().strip()
-                usuario_encontrado = next((u for u in usuarios_db if str(u["email"]).lower().strip() == email_c), None)
-                if usuario_encontrado:
-                    st.session_state.usuario_logueado = usuario_encontrado
-                    st.session_state.cookie_retries = 0
-                    st.rerun()
-            
-            # Si no hay cookies, reintentar hasta 5 veces para dar tiempo al navegador
-            if st.session_state.cookie_retries < 5:
-                st.session_state.cookie_retries += 1
-                time.sleep(0.3) # Pequeña espera para sincronización en la nube
-                st.rerun()
-        except:
-            # Fallback a reintento si get_all falla
-            if st.session_state.cookie_retries < 5:
-                st.session_state.cookie_retries += 1
-                time.sleep(0.3)
-                st.rerun()
+usuarios_db = obtener_usuarios_db(client)
 
-    if st.session_state.usuario_logueado is None:
-        col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-        with col_l2:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            if st.session_state.vista_auth == "login":
-                st.markdown('<div style="font-size: 3.5rem; text-align: center; margin-bottom: 0px;">🏢</div>', unsafe_allow_html=True)
-                st.markdown('<h1 style="text-align: center; color: #1E3A8A; font-weight: 800; margin-top: 0px;">Inside</h1>', unsafe_allow_html=True)
-                st.markdown('<p style="text-align: center; color: #64748B; margin-bottom: 30px;">Inicia sesión para continuar</p>', unsafe_allow_html=True)
-                
-                email_log = st.text_input("Correo Electrónico", placeholder="ejemplo@correo.com")
-                pass_log = st.text_input("Contraseña", type="password", placeholder="••••••••")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("Iniciar Sesión", type="primary", use_container_width=True):
-                    valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
-                    if valido:
-                        st.session_state.usuario_logueado = valido
-                        st.session_state.manual_logout = False # Resetear bandera al loguearse
-                        # Guardar cookie por 7 días
-                        expires = datetime.now() + timedelta(days=7)
-                        cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
-                        st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
-                        time.sleep(0.5) # Tiempo para que el navegador grabe la cookie
-                        st.rerun()
-                    else:
-                        st.error("❌ Correo o contraseña incorrectos.")
-                
-                st.markdown("<hr style='margin: 20px 0; border: 0.5px solid #E2E8F0;'>", unsafe_allow_html=True)
-                if st.button("¿No tienes cuenta? Regístrate aquí", use_container_width=True):
-                    st.session_state.vista_auth = "registro"
+# Lógica de Autologin con Cookie (Sincronización agresiva V3)
+# Solo intentar si el usuario no ha forzado un Logout manual en esta sesión
+if st.session_state.usuario_logueado is None and not st.session_state.manual_logout:
+    # Forzar sincronización de cookies
+    try:
+        cookies = cookie_manager.get_all()
+        if cookies and 'inside_session_email' in cookies:
+            email_c = str(cookies['inside_session_email']).lower().strip()
+            usuario_encontrado = next((u for u in usuarios_db if str(u["email"]).lower().strip() == email_c), None)
+            if usuario_encontrado:
+                st.session_state.usuario_logueado = usuario_encontrado
+                st.session_state.cookie_retries = 0
+                st.rerun()
+        
+        # Si no hay cookies, reintentar hasta 5 veces para dar tiempo al navegador
+        if st.session_state.cookie_retries < 5:
+            st.session_state.cookie_retries += 1
+            time.sleep(0.3) # Pequeña espera para sincronización en la nube
+            st.rerun()
+    except:
+        # Fallback a reintento si get_all falla
+        if st.session_state.cookie_retries < 5:
+            st.session_state.cookie_retries += 1
+            time.sleep(0.3)
+            st.rerun()
+
+if st.session_state.usuario_logueado is None:
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        if st.session_state.vista_auth == "login":
+            st.markdown('<div style="font-size: 3.5rem; text-align: center; margin-bottom: 0px;">🏢</div>', unsafe_allow_html=True)
+            st.markdown('<h1 style="text-align: center; color: #1E3A8A; font-weight: 800; margin-top: 0px;">Inside</h1>', unsafe_allow_html=True)
+            st.markdown('<p style="text-align: center; color: #64748B; margin-bottom: 30px;">Inicia sesión para continuar</p>', unsafe_allow_html=True)
+            
+            email_log = st.text_input("Correo Electrónico", placeholder="ejemplo@correo.com")
+            pass_log = st.text_input("Contraseña", type="password", placeholder="••••••••")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Iniciar Sesión", type="primary", use_container_width=True):
+                valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
+                if valido:
+                    st.session_state.usuario_logueado = valido
+                    st.session_state.manual_logout = False # Resetear bandera al loguearse
+                    # Guardar cookie por 7 días
+                    expires = datetime.now() + timedelta(days=7)
+                    cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
+                    st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
+                    time.sleep(0.5) # Tiempo para que el navegador grabe la cookie
                     st.rerun()
-            else:
-                # Pantalla de Registro
-                st.markdown('<div style="font-size: 3.5rem; text-align: center; margin-bottom: 0px;">🆕</div>', unsafe_allow_html=True)
-                st.markdown('<h1 style="text-align: center; color: #1E3A8A; font-weight: 800; margin-top: 0px;">Crear Cuenta</h1>', unsafe_allow_html=True)
-                
-                editores_actuales = [u for u in usuarios_db if u.get("rol") == "Administrador"]
-                facturas_actuales = [u for u in usuarios_db if u.get("rol") == "Colaborador"]
-                
-                can_add_editor = len(editores_actuales) < 2
-                can_add_factura = len(facturas_actuales) < 1
-                
-                if not can_add_editor and not can_add_factura:
-                    st.error("🚫 Límite global de usuarios alcanzado (Máximo 2 Administradores y 1 Colaborador).")
-                    if st.button("⬅️ Volver", use_container_width=True):
-                        st.session_state.vista_auth = "login"; st.rerun()
                 else:
-                    roles_disponibles = []
-                    if can_add_editor: roles_disponibles.append("Administrador")
-                    if can_add_factura: roles_disponibles.append("Colaborador")
-                    
-                    st.info(f"💡 Disponibilidad: {len(editores_actuales)}/2 Administradores, {len(facturas_actuales)}/1 Colaborador.")
-                    
-                    rol_r = st.selectbox("Selecciona tu Rol", roles_disponibles)
-                    n_r = st.text_input("Nombre Completo")
-                    e_r = st.text_input("Correo Electrónico")
-                    t_r = st.text_input("Teléfono")
-                    p_r = st.text_input("Contraseña", type="password")
-                    p_c = st.text_input("Confirmar Contraseña", type="password")
-                    
-                    if st.button("Registrar Usuario", type="primary", use_container_width=True):
-                        # 1. Validación de campos vacíos
-                        if not all([n_r, e_r, t_r, p_r, p_c]):
-                            st.warning("⚠️ Todos los campos son obligatorios.")
-                        # 2. Validación de formato de correo
-                        elif not re.match(r"[^@]+@[^@]+\.[^@]+", e_r):
-                            st.error("❌ El formato del correo electrónico no es válido.")
-                        # 3. Validación de teléfono (10 dígitos numéricos)
-                        elif not (t_r.isdigit() and len(t_r) == 10):
-                            st.error("❌ El teléfono debe tener exactamente 10 dígitos numéricos.")
-                        # 4. Validación de contraseñas
-                        elif p_r != p_c:
-                            st.error("❌ Las contraseñas no coinciden.")
-                        else:
-                            if registrar_usuario_db(client, {"nombre":n_r, "email":e_r, "tel":t_r, "pass":p_r, "rol":rol_r}):
-                                st.success("✅ Cuenta creada exitosamente."); st.session_state.vista_auth = "login"; st.rerun()
-                if st.button("⬅️ Ya tengo cuenta", use_container_width=True):
+                    st.error("❌ Correo o contraseña incorrectos.")
+            
+            st.markdown("<hr style='margin: 20px 0; border: 0.5px solid #E2E8F0;'>", unsafe_allow_html=True)
+            if st.button("¿No tienes cuenta? Regístrate aquí", use_container_width=True):
+                st.session_state.vista_auth = "registro"
+                st.rerun()
+        else:
+            # Pantalla de Registro
+            st.markdown('<div style="font-size: 3.5rem; text-align: center; margin-bottom: 0px;">🆕</div>', unsafe_allow_html=True)
+            st.markdown('<h1 style="text-align: center; color: #1E3A8A; font-weight: 800; margin-top: 0px;">Crear Cuenta</h1>', unsafe_allow_html=True)
+            
+            editores_actuales = [u for u in usuarios_db if u.get("rol") == "Administrador"]
+            facturas_actuales = [u for u in usuarios_db if u.get("rol") == "Colaborador"]
+            
+            can_add_editor = len(editores_actuales) < 2
+            can_add_factura = len(facturas_actuales) < 1
+            
+            if not can_add_editor and not can_add_factura:
+                st.error("🚫 Límite global de usuarios alcanzado (Máximo 2 Administradores y 1 Colaborador).")
+                if st.button("⬅️ Volver", use_container_width=True):
                     st.session_state.vista_auth = "login"; st.rerun()
-        st.stop()
+            else:
+                roles_disponibles = []
+                if can_add_editor: roles_disponibles.append("Administrador")
+                if can_add_factura: roles_disponibles.append("Colaborador")
+                
+                st.info(f"💡 Disponibilidad: {len(editores_actuales)}/2 Administradores, {len(facturas_actuales)}/1 Colaborador.")
+                
+                rol_r = st.selectbox("Selecciona tu Rol", roles_disponibles)
+                n_r = st.text_input("Nombre Completo")
+                e_r = st.text_input("Correo Electrónico")
+                t_r = st.text_input("Teléfono")
+                p_r = st.text_input("Contraseña", type="password")
+                p_c = st.text_input("Confirmar Contraseña", type="password")
+                
+                if st.button("Registrar Usuario", type="primary", use_container_width=True):
+                    # 1. Validación de campos vacíos
+                    if not all([n_r, e_r, t_r, p_r, p_c]):
+                        st.warning("⚠️ Todos los campos son obligatorios.")
+                    # 2. Validación de formato de correo
+                    elif not re.match(r"[^@]+@[^@]+\.[^@]+", e_r):
+                        st.error("❌ El formato del correo electrónico no es válido.")
+                    # 3. Validación de teléfono (10 dígitos numéricos)
+                    elif not (t_r.isdigit() and len(t_r) == 10):
+                        st.error("❌ El teléfono debe tener exactamente 10 dígitos numéricos.")
+                    # 4. Validación de contraseñas
+                    elif p_r != p_c:
+                        st.error("❌ Las contraseñas no coinciden.")
+                    else:
+                        if registrar_usuario_db(client, {"nombre":n_r, "email":e_r, "tel":t_r, "pass":p_r, "rol":rol_r}):
+                            st.success("✅ Cuenta creada exitosamente."); st.session_state.vista_auth = "login"; st.rerun()
+            if st.button("⬅️ Ya tengo cuenta", use_container_width=True):
+                st.session_state.vista_auth = "login"; st.rerun()
+    st.stop()
 
 # --- FUNCIONES DE ACCESO A DATOS ---
 @st.cache_data(ttl=60)
