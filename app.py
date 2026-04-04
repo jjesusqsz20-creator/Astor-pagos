@@ -1600,6 +1600,10 @@ if is_editor:
             if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
                 
+            # Estados de flujo por pasos
+            if "asignacion_confirmada" not in st.session_state:
+                st.session_state.asignacion_confirmada = False
+                
             # Estado para manejar el reseteo del campo de texto (debe estar fuera del fragmento para persistir)
             if "reset_prov_idx" not in st.session_state:
                 st.session_state.reset_prov_idx = 0
@@ -1748,78 +1752,98 @@ if is_editor:
             with col_cfg_2:
                 render_popover_proveedores()
             
-            # Sincronización final: Actualizar el DataFrame global si los temporales cambiaron
-            # Esto asegura que la tabla de pagos y el resto de la app usen los datos frescos
-            if "cuentas_seleccionadas_final" in st.session_state:
-                cuentas_seleccionadas = st.session_state.cuentas_seleccionadas_final
-            else:
-                cuentas_seleccionadas = []
+            # --- BOTÓN PASO 1: CONFIRMAR ASIGNACIÓN ---
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 **Paso 1: Confirmar Asignación de Proveedores**", type="secondary", use_container_width=True):
+                # 1. Detectar quiénes fueron SELECCIONADOS en los popovers (v6 keys)
+                sel_cuentas = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
+                sel_provs = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v6_cb_{p['Nombre']}", False)]
                 
-            if "provs_seleccionados_final" in st.session_state:
-                provs_seleccionados = st.session_state.provs_seleccionados_final
-            else:
-                provs_seleccionados = []
-            
+                if not sel_cuentas or not sel_provs:
+                    st.warning("⚠️ Selecciona al menos una cuenta y un proveedor antes de confirmar.")
+                else:
+                    # 2. Actualizar estado local
+                    st.session_state.cuentas_seleccionadas_final = sel_cuentas
+                    st.session_state.provs_seleccionados_final = sel_provs
+                    st.session_state.asignacion_confirmada = True
+                    
+                    # 3. Guardar visibilidad en la DB (Opcional en este paso, pero útil para persistencia)
+                    for p in st.session_state.provs_temp:
+                        p["Visible"] = (p["Nombre"] in sel_provs)
+                    
+                    df_v_step1 = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
+                    if guardar_config_db(df_v_step1):
+                        st.session_state.proveedores_df = df_v_step1
+                        st.toast("✅ Asignación confirmada. Ahora ajusta los porcentajes.")
+                    else:
+                        st.error("Error al sincronizar asignación.")
+
             st.divider()
 
-            # --- SECCIÓN DE PORCENTAJES (DINÁMICA) ---
-            if not cuentas_seleccionadas or not provs_seleccionados:
-                st.info("💡 Selecciona cuentas y proveedores arriba para ajustar los repartos.")
+            # --- SECCIÓN DE PORCENTAJES (PASO 2) ---
+            if not st.session_state.asignacion_confirmada:
+                st.info("💡 **Paso 1:** Selecciona cuentas y proveedores arriba y pulsa 'Confirmar Asignación'.")
             else:
-                # Sincronización: Poner a 0% los no seleccionados
+                cuentas_seleccionadas = st.session_state.get("cuentas_seleccionadas_final", [])
+                provs_seleccionados = st.session_state.get("provs_seleccionados_final", [])
+                
+                # Sincronizar: Poner a 0% los no seleccionados para las cuentas activas
                 for p_env in st.session_state.provs_temp:
                     if p_env["Nombre"] not in provs_seleccionados:
                         for c_sel in cuentas_seleccionadas:
                             p_env[c_sel] = 0.0
 
-                st.write("**Configuración de Porcentajes** (Suma obligatoria: 100%)")
+                st.markdown("<h5 style='color: #334155;'>📊 Paso 2: Ajustar Reparto de Pagos</h5>", unsafe_allow_html=True)
+                st.write("<small>Define cuánto le toca a cada uno (la suma debe dar 100%)</small>", unsafe_allow_html=True)
                 
                 valid_global = True
                 for c_name in cuentas_seleccionadas:
                     with st.container(border=True):
-                        # Encabezado de cuenta con Icono
                         st.markdown(f"🏦 **Distribución para {c_name}**")
                         
-                        # Suma actual de esta cuenta
                         suma_cta = sum(float(p.get(c_name, 0.0)) for p in st.session_state.provs_temp if p["Nombre"] in provs_seleccionados)
                         
-                        # Barra de progreso visual
-                        progreso = min(suma_cta / 100.0, 1.0)
-                        if abs(suma_cta - 100.0) <= 0.01:
-                            st.progress(progreso, text=f"✅ Cuenta completa: {suma_cta}%")
+                        # Alerta visual intuitiva
+                        diff = 100.0 - suma_cta
+                        if abs(diff) < 0.01:
+                            st.success(f"✅ ¡Reparto Completo! (Total: {suma_cta}%)")
+                        elif diff > 0:
+                            st.warning(f"⚠️ **Falta saldo:** Escribe {diff:.1f}% más para completar esta cuenta.")
+                            valid_global = False
                         else:
-                            st.progress(progreso, text=f"⚠️ Distribución incompleta: {suma_cta}% (Falta {100 - suma_cta:.1f}%)" if suma_cta < 100 else f"🚨 Exceso: {suma_cta}% (Sobra {suma_cta - 100:.1f}%)")
+                            st.error(f"🚨 **Saldo excedido:** Te pasaste por {abs(diff):.1f}%. Ajusta los valores.")
                             valid_global = False
 
-                        # Grid de inputs (máximo 4 por fila para limpieza)
-                        cols_prov = st.columns(4)
-                        for idx_p, p_name in enumerate(provs_seleccionados):
-                            with cols_prov[idx_p % 4]:
-                                p_obj = next((item for item in st.session_state.provs_temp if item["Nombre"] == p_name), None)
-                                if p_obj:
-                                    # Input numérico con etiqueta compacta
+                        # PROGRESS BAR PREMIUM
+                        progreso = min(suma_cta / 100.0, 1.0)
+                        st.progress(progreso)
+
+                        # Lista de inputs en 2 columnas para limpieza (como solicitaste)
+                        for p_name in provs_seleccionados:
+                            p_obj = next((item for item in st.session_state.provs_temp if item["Nombre"] == p_name), None)
+                            if p_obj:
+                                i_col1, i_col2 = st.columns([3, 1])
+                                with i_col1:
+                                    st.write(f"📦 **{p_name}**")
+                                with i_col2:
                                     val_act = float(p_obj.get(c_name, 0.0))
-                                    p_obj[c_name] = st.number_input(f"% {p_name}", 
-                                                                    value=val_act, step=1.0, 
-                                                                    min_value=0.0, max_value=100.0, 
-                                                                    key=f"pct_{c_name}_{p_name}")
+                                    p_obj[c_name] = st.number_input(f"%", value=val_act, step=1.0, min_value=0.0, max_value=100.0, key=f"pct_v2_{c_name}_{p_name}", label_visibility="collapsed")
                 
                 st.divider()
-                # Botón de guardado con lógica de validación mejorada
-                if st.button("💾 Guardar Cambios en Base de Datos", type="primary", use_container_width=True):
+                # Botón FINAL Paso 2
+                if st.button("💾 **Paso 2: Guardar Nueva Asignación de Pagos**", type="primary", use_container_width=True):
                     if not valid_global:
-                        st.error("❌ **Error de Validación:** Todas las cuentas seleccionadas deben sumar exactamente **100%** para poder guardar. Por favor, revisa las barras rojas arriba.")
+                        st.error("❌ **Error:** No podemos guardar si las cuentas no suman exactamente 100%. Revisa los mensajes de arriba.")
                     else:
-                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                        with st.spinner("Sincronizando con base de datos de Google Sheets..."):
-                            if guardar_config_db(df_prov_val):
-                                st.session_state.proveedores_df = df_prov_val
-                                st.session_state.pop("provs_temp", None)
-                                st.session_state.config_panel_open = False
-                                st.toast("✅ Configuración guardada con éxito")
+                        df_step2 = pd.DataFrame(st.session_state.provs_temp)
+                        with st.spinner("Guardando en Google Sheets..."):
+                            if guardar_config_db(df_step2):
+                                st.session_state.proveedores_df = df_step2
+                                st.session_state.asignacion_confirmada = False # Reset para la próxima
+                                st.toast("✅ ¡Configuración guardada con éxito!")
                                 st.rerun()
                             else:
-                                st.error("❌ Error de conexión al intentar guardar en la base de datos.")
+                                st.error("Error de conexión al guardar.")
 
 
 
