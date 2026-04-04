@@ -1473,8 +1473,7 @@ if is_editor:
                     df_h_manual_dash = obtener_datos_retorno_manual()
                     
                     if not df_h_ret_dash.empty:
-                        # AUDITORÍA POS-FILTRADO: Solo ver retornos de los proveedores actualmente visibles
-                        df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Proveedor"].isin(prov_visibles["Nombre"])]
+                        # AUDITORÍA: Ver todos los retornos que tengan impacto en saldos (independiente de la selección actual)
                         resumen_ret_dash = []
                         sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                         
@@ -1504,7 +1503,6 @@ if is_editor:
             st.error(f"Error procesando el tablero: {e}")
     
         # --- LAS 5 TABLAS DE REPARTO (RESTAURADAS) ---
-        prov_visibles = df_prov[df_prov["Visible"] == True]
         filas_resumen = []
         for c in CUENTAS:
             if " (" in c:
@@ -1513,7 +1511,7 @@ if is_editor:
             else:
                 nombre = c; banco = ""
                 
-            for idx, row_prov in prov_visibles.iterrows():
+            for idx, row_prov in df_prov.iterrows():
                 p = row_prov["Nombre"]
                 pct = float(row_prov.get(c, 0.0))
                 if pct > 0:
@@ -1778,20 +1776,23 @@ if is_editor:
                         st.session_state.provs_seleccionados_final = s_p
                         st.session_state.asignacion_confirmada = True
                         
-                        # SINCRONIZACIÓN ATÓMICA: Borrar rastro de lo que no esté seleccionado
+                        # LÓGICA INDIVIDUAL: Solo preparamos la visibilidad para el Paso 2
                         for p in st.session_state.provs_temp:
-                            is_p_sel = (p["Nombre"] in s_p)
-                            p["Visible"] = is_p_sel
+                            # Si se seleccionó en el Paso 1, lo hacemos visible para editar en el Paso 2
+                            if p["Nombre"] in s_p:
+                                p["Visible"] = True
                             
-                            for c in CUENTAS:
-                                # Si el proveedor no se seleccionó O la cuenta no se seleccionó -> 0%
-                                if not is_p_sel or c not in s_c:
+                            # LIMPIEZA SÓLO PARA LAS CUENTAS SELECCIONADAS ACTUALMENTE
+                            for c in s_c:
+                                if p["Nombre"] not in s_p:
                                     p[c] = 0.0
+                        
+                        # ¡IMPORTANTE!: Las cuentas que NO están en s_c no se tocan. Se quedan como están en el DB.
 
+                        # MEMORIA INTERNA: Actualizamos la vista local sin tocar el Google Sheets (Paso 1 Pasivo)
                         df_v1 = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
-                        if guardar_config_db(df_v1):
-                            st.session_state.proveedores_df = df_v1
-                            st.toast("✅ Sincronización completa. Solo verás lo seleccionado."); st.rerun()
+                        st.session_state.proveedores_df = df_v1
+                        st.toast("✅ Selección preparada. Ajusta los montos abajo.") # Sin rerun para estabilidad
 
             prov_config_panel()
 
@@ -1856,6 +1857,7 @@ if is_editor:
                         with st.spinner("Guardando en Google Sheets..."):
                             if guardar_config_db(df_step2):
                                 st.session_state.proveedores_df = df_step2
+                                st.session_state.provs_temp = df_step2.to_dict('records') # ¡SINCRONIZACIÓN CRÍTICA!
                                 st.session_state.asignacion_confirmada = False # Reset para la próxima
                                 st.toast("✅ ¡Configuración guardada con éxito!")
                                 st.rerun()
