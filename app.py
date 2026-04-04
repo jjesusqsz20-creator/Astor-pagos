@@ -880,7 +880,11 @@ if "ingreso_mensual" not in st.session_state or "proveedores_df" not in st.sessi
         prov_list = [p1, p2]
         
     st.session_state.ingreso_mensual = ingreso_val
-    st.session_state.proveedores_df = pd.DataFrame(prov_list)
+    # Garantizar que el DataFrame tenga columnas incluso si está vacío
+    if prov_list:
+        st.session_state.proveedores_df = pd.DataFrame(prov_list)
+    else:
+        st.session_state.proveedores_df = pd.DataFrame(columns=["Nombre", "Visible"] + CUENTAS)
 
 @st.cache_data(ttl=600)  # Mantiene los datos en memoria para cargar la página al instante
 def obtener_datos():
@@ -1163,8 +1167,17 @@ if is_editor:
             col_pct = cuenta_seleccionada
             
             # Filtro: Mostrar solo proveedores visibles Y que tengan porcentaje > 0 en esta cuenta
-            prov_validos = prov_df[(prov_df["Visible"] == True) & (prov_df[col_pct] > 0)]
-            lista_prov_form = prov_validos["Nombre"].unique().tolist()
+            # Añadimos protección contra DataFrame vacío
+            if prov_df.empty:
+                prov_validos = pd.DataFrame(columns=["Nombre", "Visible"] + CUENTAS)
+                lista_prov_form = []
+            else:
+                try:
+                    prov_validos = prov_df[(prov_df["Visible"] == True) & (prov_df[col_pct] > 0)]
+                    lista_prov_form = prov_validos["Nombre"].unique().tolist()
+                except KeyError:
+                    prov_validos = pd.DataFrame(columns=["Nombre", "Visible"] + CUENTAS)
+                    lista_prov_form = []
             
             if not lista_prov_form:
                 st.warning(f"⚠️ No hay proveedores configurados para {cuenta_seleccionada}.")
