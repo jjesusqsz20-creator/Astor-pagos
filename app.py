@@ -1649,13 +1649,13 @@ if is_editor:
                         n_v = [p["Nombre"] for p in st.session_state.provs_temp]
 
                         # 2. SINCRONIZACIÓN REACTIVA (v9)
-                        if n_v and \"prev_master_provs\" not in st.session_state:
-                            st.session_state.prev_master_provs = st.session_state.get(\"master_provs\", False)
+                        if n_v and "prev_master_provs" not in st.session_state:
+                            st.session_state.prev_master_provs = st.session_state.get("master_provs", False)
                         
-                        if n_v and st.session_state.get(\"master_provs\", False) != st.session_state.get(\"prev_master_provs\", False):
-                            val_m = st.session_state.get(\"master_provs\", False)
+                        if n_v and st.session_state.get("master_provs", False) != st.session_state.get("prev_master_provs", False):
+                            val_m = st.session_state.get("master_provs", False)
                             for n in n_v:
-                                st.session_state[f\"p_prov_v9_cb_{n}\"] = val_m
+                                st.session_state[f"p_prov_v9_cb_{n}"] = val_m
                             st.session_state.prev_master_provs = val_m
 
                         def sync_ind_p():
