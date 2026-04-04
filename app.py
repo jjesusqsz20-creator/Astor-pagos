@@ -1573,7 +1573,8 @@ if is_editor:
             nombre_col = pad_mono(nombre_raw, 48) 
             m_ing = f"Ing:${ingreso:,.0f}"
             m_pag = f"PAGO:${total_abono:,.0f}"
-            m_sal = f"Sal:{("🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴"))}${total_saldo:,.0f}"
+            m_sal_icon = '🟢' if total_saldo <= 0 else ('🟡' if total_abono > 0 else '🔴')
+            m_sal = f"Sal:{m_sal_icon}${total_saldo:,.0f}"
             
             titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
             
