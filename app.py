@@ -318,9 +318,8 @@ def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
 
 # --- CONFIGURACIÓN DE ESTADO ---
 # --- GESTIÓN DE COOKIES (SESIÓN) ---
-if "cookie_manager" not in st.session_state:
-    st.session_state.cookie_manager = stx.CookieManager(key="inside_cookie_manager")
-cookie_manager = st.session_state.cookie_manager
+# Inicializar el componente de cookies al nivel más alto posible
+cookie_manager = stx.CookieManager(key="inside_cookie_manager_v2")
 
 if "usuario_logueado" not in st.session_state:
     st.session_state.usuario_logueado = None
@@ -455,26 +454,29 @@ try:
     # --- MURO DE AUTENTICACIÓN ---
     usuarios_db = obtener_usuarios_db(client)
     
-    # Lógica de Autologin con Cookie (Sincronización robusta para Streamlit Cloud)
+    # Lógica de Autologin con Cookie (Sincronización agresiva V3)
     # Solo intentar si el usuario no ha forzado un Logout manual en esta sesión
     if st.session_state.usuario_logueado is None and not st.session_state.manual_logout:
-        session_cookie = cookie_manager.get('inside_session_email')
-        
-        if session_cookie:
-            # Normalización robusta para búsqueda por email
-            email_c = str(session_cookie).lower().strip()
-            usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == email_c), None)
+        # Forzar sincronización de cookies
+        try:
+            cookies = cookie_manager.get_all()
+            if cookies and 'inside_session_email' in cookies:
+                email_c = str(cookies['inside_session_email']).lower().strip()
+                usuario_encontrado = next((u for u in usuarios_db if str(u["email"]).lower().strip() == email_c), None)
+                if usuario_encontrado:
+                    st.session_state.usuario_logueado = usuario_encontrado
+                    st.session_state.cookie_retries = 0
+                    st.rerun()
             
-            if usuario_encontrado:
-                st.session_state.usuario_logueado = usuario_encontrado
-                st.session_state.cookie_retries = 0 # Resetear contador al tener éxito
+            # Si no hay cookies, reintentar hasta 5 veces para dar tiempo al navegador
+            if st.session_state.cookie_retries < 5:
+                st.session_state.cookie_retries += 1
                 st.rerun()
-        
-        # Estrategia de reintentos: El componente CookieManager necesita tiempo para leer del navegador
-        # Tras un refresco, el contador permite hasta 5 intentos rápidos de sincronización.
-        elif st.session_state.cookie_retries < 5:
-            st.session_state.cookie_retries += 1
-            st.rerun()
+        except:
+            # Fallback a reintento si get_all falla
+            if st.session_state.cookie_retries < 5:
+                st.session_state.cookie_retries += 1
+                st.rerun()
 
     if st.session_state.usuario_logueado is None:
         col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
