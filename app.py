@@ -1210,25 +1210,22 @@ if is_editor:
                     st.error(f"❌ Error crítico: El proveedor {proveedor_seleccionado} no tiene permisos para esta cuenta (0%).")
                 else:
                     with st.spinner("Guardando Pago y Retorno en la Nube..."):
+                        # Usar una bandera para el refresco fuera del try
+                        exito_guardado = False
                         try:
-                            # 1. Registrar Pago a Proveedor y obtener Ticket
                             id_abono = registrar_pago(cuenta_seleccionada, proveedor_seleccionado, float(monto_ingresado))
-                            
-                            # 2. Registrar Retorno Automáticamente cargando la referencia
-                            # Desglosar cuenta en Nombre y Banco
                             nombre_tit = cuenta_seleccionada.split(" (")[0] if " (" in cuenta_seleccionada else cuenta_seleccionada
                             banco_tit = cuenta_seleccionada.split(" (")[1].replace(")", "") if " (" in cuenta_seleccionada else ""
-                            
-                            # Cálculo: Total * 0.04
                             dif_calculada = float(monto_ingresado) * 0.04
                             neto_retorno = float(monto_ingresado) - dif_calculada
-                            
                             registrar_retorno(nombre_tit, banco_tit, proveedor_seleccionado, float(monto_ingresado), float(dif_calculada), float(neto_retorno), ref_abono=id_abono)
-                            
-                            st.success(f"✅ ¡Pago y Retorno de ${monto_ingresado:,.2f} MXN registrados exitosamente!")
-                            st.rerun()
+                            exito_guardado = True
                         except Exception as e:
-                            st.error(f"❌ Ocurrió un error al guardar: {e}")
+                            st.error(f"❌ Error al guardar en base de datos: {e}")
+                        
+                        if exito_guardado:
+                            st.success(f"✅ ¡Pago y Retorno de ${monto_ingresado:,.2f} MXN registrados!")
+                            st.rerun()
 
         # --- HISTORIAL DE PAGO A PROVEEDOR (DESPLEGABLE) ---
         st.markdown('<div id="historial-abonos"></div>', unsafe_allow_html=True)
@@ -1361,13 +1358,18 @@ if is_editor or is_factura:
             if monto_r <= 0:
                 st.warning("El monto debe ser mayor a 0.")
             else:
+                exito_ret = False
                 with st.spinner("Guardando Retorno Global..."):
-                    if registrar_retorno_manual(float(monto_r)):
-                        st.success(f"✅ ¡Retorno global de ${monto_r:,.2f} MXN registrado exitosamente!")
-                        st.session_state.monto_retorno_val = 50000.0 # Reset
-                        st.rerun()
-                    else:
-                        st.error("❌ Ocurrió un error al guardar el retorno global.")
+                    try:
+                        if registrar_retorno_manual(float(monto_r)):
+                            exito_ret = True
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar retorno: {e}")
+                
+                if exito_ret:
+                    st.success(f"✅ ¡Retorno global de ${monto_r:,.2f} MXN registrado!")
+                    st.session_state.monto_retorno_val = 50000.0
+                    st.rerun()
         
         # --- HISTORIAL DE RETORNO (DESPLEGABLE) ---
         st.markdown('<div id="historial-retornos"></div>', unsafe_allow_html=True)
@@ -1467,38 +1469,39 @@ if is_editor:
                     st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
                     st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
                     
-                    df_h_ret_dash = obtener_datos_retorno()
-                    df_h_manual_dash = obtener_datos_retorno_manual()
-                    
-                    if not df_h_ret_dash.empty:
-                        resumen_ret_dash = []
-                        sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
+                        df_h_ret_dash = obtener_datos_retorno()
+                        df_h_manual_dash = obtener_datos_retorno_manual()
                         
-                        for c in CUENTAS:
-                            nombre_c = c.split(" (")[0] if " (" in c else c
-                            banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
-                            df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
-                            total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
-                            total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
-                            retorno_auto_bruto = total_monto_prov - total_dif_inside
-                            sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
-                            sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
+                        if not df_h_ret_dash.empty:
+                            resumen_ret_dash = []
+                            sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
+                            
+                            for c in CUENTAS:
+                                nombre_c = c.split(" (")[0] if " (" in c else c
+                                banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
+                                df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
+                                total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
+                                total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
+                                retorno_auto_bruto = total_monto_prov - total_dif_inside
+                                sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
+                                sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
+                                resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
+                            
+                            df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
+                            st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
+                            st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+                            st.divider()
+                        else:
+                            st.info("No hay retornos registrados en el periodo seleccionado.")
                         
-                        df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
-                        st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
-                        st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
-                        st.divider()
-                    else:
-                        st.info("No hay retornos registrados en el periodo seleccionado.")
-                    
-                    # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
-                    df_historial = obtener_datos()
-                    if not df_historial.empty and "Cuenta" in df_historial.columns:
-                        df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
-        except Exception as e:
-            st.error(f"Error procesando el tablero: {e}")
+                        # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
+                        df_historial = obtener_datos()
+                        if not df_historial.empty and "Cuenta" in df_historial.columns:
+                            df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+            except Exception as e:
+                st.error(f"Error procesando el tablero: {e}")
     
+            # --- LAS 5 TABLAS DE REPARTO (RESTAURADAS) ---
             filas_resumen = []
             for c in CUENTAS:
                 if " (" in c:
@@ -1615,11 +1618,10 @@ if is_editor:
             
             nombres_prov_actuales = sorted(list(set([str(p.get("Nombre", "")).strip() for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""])))
 
-            # --- LÓGICA DE SINCRONIZACIÓN DINÁMICA (FRAGMENTOS) ---
-            def render_popover_cuentas():
-                with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
-                    @st.fragment
-                    def content_cuentas():
+            # --- LÓGICA DE SINCRONIZACIÓN DINÁMICA ---
+            def prov_config_panel():
+                def render_popover_cuentas():
+                    with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
                         def sync_all():
                             val = st.session_state.master_ctas
                             for c in CUENTAS:
@@ -1635,13 +1637,10 @@ if is_editor:
                             st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_ind)
                         
                         st.session_state.cuentas_seleccionadas_final = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
-                    
-                    content_cuentas()
 
-            def render_popover_proveedores():
-                with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
-                    @st.fragment
-                    def content_proveedores():
+                def render_popover_proveedores():
+                    with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
+                        # 1. LIMPIEZA Y DEDUPLICACIÓN (v9) - GARANTÍA ZERO ERRORS
                         # DEDUPLICACIÓN INTERNA: Cada vez que el menú se refresca, nos aseguramos de que no haya duplicados
                         temp_list = []
                         seen_names = set()
@@ -1652,27 +1651,28 @@ if is_editor:
                                 seen_names.add(name)
                         st.session_state.provs_temp = temp_list
 
-                        nombres_v = [p["Nombre"] for p in st.session_state.provs_temp]
+                        n_v = [p["Nombre"] for p in st.session_state.provs_temp]
+
+                        # 2. SINCRONIZACIÓN REACTIVA (v9)
+                        if n_v and \"prev_master_provs\" not in st.session_state:
+                            st.session_state.prev_master_provs = st.session_state.get(\"master_provs\", False)
                         
-                        # --- LÓGICA REACTIVA PARA "SELECCIONAR TODOS" ---
-                        if "prev_master_provs" not in st.session_state:
-                            st.session_state.prev_master_provs = st.session_state.get("master_provs", False)
-                        
-                        # Si el interruptor maestro cambió, forzamos a todos los hijos
-                        if st.session_state.get("master_provs", False) != st.session_state.prev_master_provs:
-                            new_val = st.session_state.master_provs
-                            for n in nombres_v:
-                                st.session_state[f"p_prov_v6_cb_{n}"] = new_val
-                            st.session_state.prev_master_provs = new_val
+                        if n_v and st.session_state.get(\"master_provs\", False) != st.session_state.get(\"prev_master_provs\", False):
+                            val_m = st.session_state.get(\"master_provs\", False)
+                            for n in n_v:
+                                st.session_state[f\"p_prov_v9_cb_{n}\"] = val_m
+                            st.session_state.prev_master_provs = val_m
 
                         def sync_ind_p():
-                            # Sincronización inversa logic para mantener el master al día
-                            all_sel = all(st.session_state.get(f"p_prov_v6_cb_{n}", False) for n in nombres_v)
-                            st.session_state.master_provs = all_sel
-                            st.session_state.prev_master_provs = all_sel
+                            all_s = all(st.session_state.get(f"p_prov_v9_cb_{n}", False) for n in n_v) if n_v else False
+                            st.session_state.master_provs = all_s
+                            st.session_state.prev_master_provs = all_s
 
+                        # --- LISTADO DE PROVEEDORES ---
                         st.markdown("**Proveedores participantes**")
-                        if nombres_v:
+                        if not n_v:
+                            st.info("📢 No hay proveedores registrados. ¡Añade uno nuevo abajo!")
+                        else:
                             # Sin on_change para que la lógica reactiva de arriba tome el mando
                             st.checkbox("👥 Seleccionar todos", key="master_provs")
                         
@@ -1685,106 +1685,105 @@ if is_editor:
                                     st.warning(f"¿Borrar {p_name}?", icon="⚠️")
                                     c_d1, c_d2 = st.columns(2)
                                     with c_d1:
-                                        if st.button("❌ No", key=f"c_del_{i}"):
+                                        if st.button("❌ No", key=f"c_del_v9_{i}"):
                                             st.session_state.confirm_delete_idx = None
                                     with c_d2:
-                                        if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
+                                        if st.button("✅ Sí", key=f"f_del_v9_{i}", type="primary"):
                                             p_name_del = st.session_state.provs_temp[i]["Nombre"]
                                             st.session_state.provs_temp.pop(i)
                                             df_new_v = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                             if guardar_config_db(df_new_v):
                                                 st.session_state.proveedores_df = df_new_v
-                                                st.session_state.pop(f"p_prov_v6_cb_{p_name_del}", None) # Limpieza v6
+                                                st.session_state.pop(f"p_prov_v9_cb_{p_name_del}", None) # Limpieza v9
                                                 st.session_state.confirm_delete_idx = None
                                                 st.toast(f"🗑️ {p_name_del} eliminado globalmente")
                                                 st.rerun()
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
-                                    # Usamos prefijo v6 para máxima seguridad contra IDs persistentes
-                                    st.checkbox(p_name, key=f"p_prov_v6_cb_{p_name}", on_change=sync_ind_p)
+                                    # Usamos prefijo v9 para máxima seguridad reactiva
+                                    st.checkbox(p_name, key=f"p_prov_v9_cb_{p_name}", on_change=sync_ind_p)
                                 with r_c2:
-                                    if st.button("🗑", key=f"b_del_{i}"):
+                                    if st.button("🗑", key=f"b_del_v9_{i}"):
                                         st.session_state.confirm_add_prov = False
-                                        st.session_state.confirm_delete_idx = i
+                                        st.session_state.confirm_delete_idx = i; st.rerun()
                         
                         st.divider()
                         st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                         f_col1, f_col2 = st.columns([4, 1])
                         
                         with f_col1:
-                            # v8 garantiza un widget nuevo y vacío tras cada éxito o cancelación
-                            nuevo_nombre_int = st.text_input("Nombre", key=f"in_new_p_v8_{st.session_state.reset_prov_idx}", label_visibility="collapsed")
+                            # v9 asegura limpieza total tras cada éxito (Zero Errors)
+                            nuevo_v9 = st.text_input("Nombre", key=f"in_new_v9_{st.session_state.reset_prov_idx}", label_visibility="collapsed")
                         with f_col2:
-                            if st.button("➕", key="btn_add_prov_int"):
-                                if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_v:
+                            if st.button("➕", key="btn_add_v9_f"):
+                                if nuevo_v9.strip() and nuevo_v9.strip() not in n_v:
                                     # EXCLUSIVIDAD: Si vamos a añadir, cancelamos el borrado
                                     st.session_state.confirm_delete_idx = None
                                     st.session_state.confirm_add_prov = True
 
                         if st.session_state.confirm_add_prov:
                             with st.container(border=True):
-                                st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}'?", icon="ℹ️")
+                                st.warning(f"¿Registrar '{nuevo_v9.strip()}'?", icon="ℹ️")
                                 ca_col1, ca_col2 = st.columns(2)
                                 with ca_col1:
-                                    if st.button("❌ No", key="cancel_add_prov"):
+                                    if st.button("❌ No", key="no_add_v9_f"):
                                         st.session_state.confirm_add_prov = False
-                                        st.session_state.reset_prov_idx += 1 # Limpiamos el campo al cancelar
-                                        st.rerun()
+                                        st.session_state.reset_prov_idx += 1; st.rerun()
                                 with ca_col2:
-                                    if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary"):
+                                    if st.button("✅ Sí", key="yes_add_v9_f", type="primary"):
                                         # LIMPIEZA INMEDIATA: Desactivamos la pregunta antes de procesar para evitar race conditions
                                         st.session_state.confirm_add_prov = False
-                                        
-                                        nuevo_p_nom = nuevo_nombre_int.strip()
-                                        if nuevo_p_nom not in [str(px.get("Nombre", "")).strip() for px in st.session_state.provs_temp]:
-                                            nuevo_p = {"Nombre": nuevo_p_nom, "Visible": True}
-                                            for c in CUENTAS: nuevo_p[c] = 0.0
-                                            st.session_state.provs_temp.append(nuevo_p)
+                                        nom_ok = nuevo_v9.strip()
+                                        if nom_ok not in n_v:
+                                            new_p = {"Nombre": nom_ok, "Visible": True}
+                                            for c in CUENTAS: new_p[c] = 0.0
+                                            st.session_state.provs_temp.append(new_p)
                                             
-                                        df_new_add = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
-                                        if guardar_config_db(df_new_add):
-                                            st.session_state.proveedores_df = df_new_add
+                                        df_add = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
+                                        if guardar_config_db(df_add):
+                                            st.session_state.proveedores_df = df_add
                                             st.session_state.reset_prov_idx += 1
-                                            st.toast(f"✅ {nuevo_p_nom} registrado")
-                                            st.rerun()
+                                            st.toast(f"✅ {nom_ok} registrado"); st.rerun()
                         
                         # Sincronización final usando IDs v6
-                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != "" and st.session_state.get(f"p_prov_v6_cb_{p['Nombre']}", False)]
+                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v9_cb_{p['Nombre']}", False)]
                     
                     content_proveedores()
             
-            col_cfg_1, col_cfg_2 = st.columns(2)
-            with col_cfg_1:
-                render_popover_cuentas()
-            with col_cfg_2:
-                render_popover_proveedores()
-            
-            # --- BOTÓN PASO 1: CONFIRMAR ASIGNACIÓN ---
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 **Confirmar Asignación de Proveedores**", type="secondary", use_container_width=True):
-                # 1. Detectar quiénes fueron SELECCIONADOS en los popovers (v6 keys)
-                sel_cuentas = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
-                sel_provs = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v6_cb_{p['Nombre']}", False)]
+                # --- DISEÑO DEL PANEL ---
+                lc1, lc2 = st.columns(2)
+                n_sel_c = sum(1 for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False))
+                n_sel_p = sum(1 for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v9_cb_{p['Nombre']}", False))
+
+                with lc1:
+                    st.info(f"🏦 {n_sel_c} cuentas seleccionadas")
+                    render_popover_cuentas()
+                    
+                with lc2:
+                    st.info(f"👥 {n_sel_p} proveedores seleccionados")
+                    render_popover_proveedores()
                 
-                if not sel_cuentas or not sel_provs:
-                    st.warning("⚠️ Selecciona al menos una cuenta y un proveedor antes de confirmar.")
-                else:
-                    # 2. Actualizar estado local
-                    st.session_state.cuentas_seleccionadas_final = sel_cuentas
-                    st.session_state.provs_seleccionados_final = sel_provs
-                    st.session_state.asignacion_confirmada = True
+                # --- BOTÓN PASO 1 ---
+                st.write("<br>", unsafe_allow_html=True)
+                if st.button("💾 **Confirmar Asignación para Paso 2**", type="primary", use_container_width=True):
+                    s_c = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
+                    s_p = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v9_cb_{p['Nombre']}", False)]
                     
-                    # 3. Guardar visibilidad en la DB (Opcional en este paso, pero útil para persistencia)
-                    for p in st.session_state.provs_temp:
-                        p["Visible"] = (p["Nombre"] in sel_provs)
-                    
-                    df_v_step1 = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
-                    if guardar_config_db(df_v_step1):
-                        st.session_state.proveedores_df = df_v_step1
-                        st.toast("✅ Asignación confirmada. Ahora ajusta los porcentajes.")
+                    if not s_c or not s_p:
+                        st.warning("⚠️ Selecciona cuentas y proveedores antes de confirmar.")
                     else:
-                        st.error("Error al sincronizar asignación.")
+                        st.session_state.cuentas_seleccionadas_final = s_c
+                        st.session_state.provs_seleccionados_final = s_p
+                        st.session_state.asignacion_confirmada = True
+                        for p in st.session_state.provs_temp:
+                             p["Visible"] = (p["Nombre"] in s_p)
+                        df_v1 = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
+                        if guardar_config_db(df_v1):
+                            st.session_state.proveedores_df = df_v1
+                            st.toast("✅ Asignación confirmada. Baja para el Paso 2."); st.rerun()
+
+            prov_config_panel()
 
             st.divider()
 
