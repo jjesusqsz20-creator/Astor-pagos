@@ -1754,7 +1754,7 @@ if is_editor:
             
             # --- BOTÓN PASO 1: CONFIRMAR ASIGNACIÓN ---
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 **Paso 1: Confirmar Asignación de Proveedores**", type="secondary", use_container_width=True):
+            if st.button("💾 **Confirmar Asignación de Proveedores**", type="secondary", use_container_width=True):
                 # 1. Detectar quiénes fueron SELECCIONADOS en los popovers (v6 keys)
                 sel_cuentas = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
                 sel_provs = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v6_cb_{p['Nombre']}", False)]
@@ -1793,7 +1793,7 @@ if is_editor:
                         for c_sel in cuentas_seleccionadas:
                             p_env[c_sel] = 0.0
 
-                st.markdown("<h5 style='color: #334155;'>📊 Paso 2: Ajustar Reparto de Pagos</h5>", unsafe_allow_html=True)
+                st.markdown("<h5 style='color: #334155;'>📊 Ajustar Reparto de Pagos</h5>", unsafe_allow_html=True)
                 st.write("<small>Define cuánto le toca a cada uno (la suma debe dar 100%)</small>", unsafe_allow_html=True)
                 
                 valid_global = True
@@ -1831,7 +1831,7 @@ if is_editor:
                 
                 st.divider()
                 # Botón FINAL Paso 2
-                if st.button("💾 **Paso 2: Guardar Nueva Asignación de Pagos**", type="primary", use_container_width=True):
+                if st.button("💾 **Guardar Nueva Asignación de Pagos**", type="primary", use_container_width=True):
                     if not valid_global:
                         st.error("❌ **Error:** No podemos guardar si las cuentas no suman exactamente 100%. Revisa los mensajes de arriba.")
                     else:
