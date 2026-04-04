@@ -1744,7 +1744,6 @@ if is_editor:
                         # Sincronización final usando IDs v6
                         st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if st.session_state.get(f"p_prov_v9_cb_{p['Nombre']}", False)]
                     
-                    content_proveedores()
             
                 # --- DISEÑO DEL PANEL ---
                 lc1, lc2 = st.columns(2)
