@@ -1569,7 +1569,7 @@ if is_editor:
         st.markdown('<div style="background-color: #e11d48; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
-        with st.expander("Panel de Configuración de Proveedores", expanded=st.session_state.config_panel_open):
+        with st.expander("Panel de Configuración de Proveedores"):
             if "provs_temp" not in st.session_state:
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
             
@@ -1614,7 +1614,7 @@ if is_editor:
             
             with col_cfg_1:
                 st.markdown("**Cuentas a configurar**")
-                with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
+                with st.popover("📂 Seleccionar Cuentas", key="p_popover_ctas", use_container_width=True):
                     st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
                     cuentas_seleccionadas = []
                     for c in CUENTAS:
@@ -1625,7 +1625,7 @@ if is_editor:
             
             with col_cfg_2:
                 st.markdown("**Proveedores participantes**")
-                with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
+                with st.popover("👤 Seleccionar Proveedores", key="p_popover_provs", use_container_width=True):
                     st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
                     provs_seleccionados = []
                     
