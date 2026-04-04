@@ -567,7 +567,7 @@ if st.session_state.usuario_logueado is None:
     st.stop()
 
 # --- FUNCIONES DE ACCESO A DATOS ---
-@st.cache_data(ttl=60)
+# Quitamos el cache para que los cambios en gestión sean instantáneos y reales tras añadir/borrar
 def obtener_config_db():
     try:
         data = sheet_config.get_all_values()
@@ -1596,9 +1596,13 @@ if is_editor:
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
         with st.expander("Panel de Configuración de Proveedores"):
-            # Sincronización proactiva: Si proveedores_df cambió fuera, actualizar provs_temp
+            # Sincronización robusta: Siempre usar el DataFrame global como base si provs_temp no existe 
+            # o si el número de proveedores no coincide (señal de cambio externo o reciente)
             if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
+            
+            # Limpieza proactiva de nombres vacíos que puedan quedar en el diccionario
+            st.session_state.provs_temp = [p for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""]
             
             # Estado para manejar la confirmación de eliminación y adición
             if "confirm_delete_idx" not in st.session_state:
