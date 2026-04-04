@@ -1664,17 +1664,21 @@ if is_editor:
                                     if st.button("🗑", key=f"b_del_{i}"):
                                         st.session_state.confirm_delete_idx = i; st.rerun() # Seguimos necesitando rerun para refrescar el layout del fragmento
                         
+                        # 3. Añadir Nuevo Proveedor (con reseteo dinámico de campo)
                         st.divider()
                         st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                         f_col1, f_col2 = st.columns([4, 1])
+                        
+                        # Usamos un contador para forzar el reseteo del widget cuando sea necesario
+                        if "reset_prov_idx" not in st.session_state:
+                            st.session_state.reset_prov_idx = 0
+                            
                         with f_col1:
-                            nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
+                            nuevo_nombre_int = st.text_input("Nombre", key=f"in_new_p_dyn_{st.session_state.reset_prov_idx}", label_visibility="collapsed")
                         with f_col2:
-                            # Al interactuar con el botón, el fragmento se refresca automáticamente sin cerrar el popover (que es el padre)
                             if st.button("➕", key="btn_add_prov_int"):
                                 if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_v:
                                     st.session_state.confirm_add_prov = True
-                                    # Eliminamos st.rerun() para que NO se cierre el popover
 
                         if st.session_state.confirm_add_prov:
                             with st.container(border=True):
@@ -1690,7 +1694,8 @@ if is_editor:
                                         st.session_state.provs_temp.append(nuevo_p)
                                         if guardar_config_db(pd.DataFrame(st.session_state.provs_temp)):
                                             st.session_state.confirm_add_prov = False
-                                            st.session_state.in_new_prov_int = ""
+                                            # Forzamos cambio de key para limpiar el campo sin usar session_state directamente
+                                            st.session_state.reset_prov_idx += 1
                                             st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
                                             st.rerun()
                         
