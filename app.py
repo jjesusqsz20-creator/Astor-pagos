@@ -493,14 +493,14 @@ try:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("Iniciar Sesión", type="primary", use_container_width=True):
                     valido = next((u for u in usuarios_db if u["email"].lower().strip() == email_log.lower().strip() and u["pass"].strip() == pass_log.strip()), None)
-                        if valido:
-                            st.session_state.usuario_logueado = valido
-                            st.session_state.manual_logout = False # Resetear bandera al loguearse
-                            # Guardar cookie por 30 días para persistencia agresiva
-                            expires = datetime.now() + timedelta(days=30)
-                            cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
-                            st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
-                            st.rerun()
+                    if valido:
+                        st.session_state.usuario_logueado = valido
+                        st.session_state.manual_logout = False # Resetear bandera al loguearse
+                        # Guardar cookie por 30 días para persistencia agresiva
+                        expires = datetime.now() + timedelta(days=30)
+                        cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
+                        st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
+                        st.rerun()
                     else:
                         st.error("❌ Correo o contraseña incorrectos.")
                 
