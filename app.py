@@ -1449,25 +1449,35 @@ if is_editor or is_factura:
 if is_editor:
     # Lógica de preparación de datos para el Tablero (Validaciones)
     df_prov = st.session_state.proveedores_df
-    prov_visibles = df_prov[df_prov["Visible"] == True]
-    errores_porcentaje = [c for c in CUENTAS if abs(prov_visibles[c].sum() - 100.0) > 0.01]
     
-    if errores_porcentaje:
-        st.warning(f"⚠️ Atención: Los porcentajes no suman 100% para algunas cuentas. El tablero se habilitará cuando la configuración sea correcta.")
-        # No detenemos la ejecución para permitir llegar a la sección de Configuración abajo
+    # Protección total: Si no hay proveedores, no hay nada que validar
+    if df_prov.empty:
+        st.info("💡 No hay proveedores registrados. Dirígete a la sección de 'Gestión de Proveedores' abajo para añadir el primero.")
     else:
-        # 4. TABLERO DE CONTROL 
-        with st.container(border=True):
-            # Franjita índigo para el tablero
-            st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-            st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
+        try:
+            prov_visibles = df_prov[df_prov["Visible"] == True]
+            # Validar que al menos existan las columnas de cuentas antes de sumar
+            cols_reparto = [c for c in CUENTAS if c in prov_visibles.columns]
+            errores_porcentaje = [c for c in cols_reparto if abs(prov_visibles[c].sum() - 100.0) > 0.01]
             
-            # --- TABLA RESUMEN DE RETORNOS ---
-            df_h_ret_dash = obtener_datos_retorno()
-            df_h_manual_dash = obtener_datos_retorno_manual()
-            
-            if not df_h_ret_dash.empty:
-                resumen_ret_dash = []
+            if errores_porcentaje:
+                st.warning(f"⚠️ Atención: Los porcentajes no suman 100% para algunas cuentas. El tablero se habilitará cuando la configuración sea correcta.")
+            else:
+                # 4. TABLERO DE CONTROL 
+                with st.container(border=True):
+                    # Franjita índigo para el tablero
+                    st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+                    st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
+                    
+                    # --- TABLA RESUMEN DE RETORNOS ---
+                    df_h_ret_dash = obtener_datos_retorno()
+                    df_h_manual_dash = obtener_datos_retorno_manual()
+                    
+                    if not df_h_ret_dash.empty:
+                        resumen_ret_dash = []
+                        # ... resto de la lógica del tablero (se mantiene igual)
+        except Exception as e:
+            st.error(f"Error procesando el tablero: {e}")
                 sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                 
                 for c in CUENTAS:
@@ -1672,7 +1682,8 @@ if is_editor:
                                             # 2. Quitarlo de la lista temporal
                                             st.session_state.provs_temp.pop(i)
                                             # 3. Actualizar memoria global y DB
-                                            df_new_v = pd.DataFrame(st.session_state.provs_temp)
+                                            # Garantizamos que el DataFrame mantenga sus columnas aunque esté vacío
+                                            df_new_v = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                             if guardar_config_db(df_new_v):
                                                 st.session_state.proveedores_df = df_new_v
                                                 # 4. Limpiar rastro de selección para que desaparezca de las tablas de arriba
@@ -1717,7 +1728,10 @@ if is_editor:
                                         nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
                                         for c in CUENTAS: nuevo_p[c] = 0.0
                                         st.session_state.provs_temp.append(nuevo_p)
-                                        if guardar_config_db(pd.DataFrame(st.session_state.provs_temp)):
+                                        # Garantizamos que el DataFrame mantenga sus columnas
+                                        df_new_add = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
+                                        if guardar_config_db(df_new_add):
+                                            st.session_state.proveedores_df = df_new_add
                                             st.session_state.confirm_add_prov = False
                                             # Forzamos cambio de key para limpiar el campo sin usar session_state directamente
                                             st.session_state.reset_prov_idx += 1
