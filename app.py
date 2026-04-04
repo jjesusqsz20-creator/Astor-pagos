@@ -460,8 +460,8 @@ try:
                 st.rerun()
         
         # Estrategia de reintentos: El componente CookieManager necesita tiempo para leer del navegador
-        # Tras un refresco, el contador permite hasta 3 intentos rápidos de sincronización.
-        elif st.session_state.cookie_retries < 3:
+        # Tras un refresco, el contador permite hasta 5 intentos rápidos de sincronización.
+        elif st.session_state.cookie_retries < 5:
             st.session_state.cookie_retries += 1
             st.rerun()
 
@@ -1614,7 +1614,7 @@ if is_editor:
             
             with col_cfg_1:
                 st.markdown("**Cuentas a configurar**")
-                with st.popover("📂 Seleccionar Cuentas", key="p_popover_ctas", use_container_width=True):
+                with st.popover("📂 Seleccionar Cuentas", key="p_popover_ctas"):
                     st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
                     cuentas_seleccionadas = []
                     for c in CUENTAS:
@@ -1625,7 +1625,7 @@ if is_editor:
             
             with col_cfg_2:
                 st.markdown("**Proveedores participantes**")
-                with st.popover("👤 Seleccionar Proveedores", key="p_popover_provs", use_container_width=True):
+                with st.popover("👤 Seleccionar Proveedores", key="p_popover_provs"):
                     st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
                     provs_seleccionados = []
                     
