@@ -1566,9 +1566,11 @@ if is_editor:
             if "provs_temp" not in st.session_state:
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
             
-            # Estado para manejar la confirmación de eliminación
+            # Estado para manejar la confirmación de eliminación y adición
             if "confirm_delete_idx" not in st.session_state:
                 st.session_state.confirm_delete_idx = None
+            if "confirm_add_prov" not in st.session_state:
+                st.session_state.confirm_add_prov = False
             
             nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
 
@@ -1657,14 +1659,39 @@ if is_editor:
                     st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                     f_col1, f_col2 = st.columns([4, 1])
                     with f_col1:
+                        # Usar el estado directamente para el valor si es necesario, pero text_input lo maneja con su key
                         nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
                     with f_col2:
                         if st.button("➕", key="btn_add_prov_int"):
                             if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_prov_actuales:
-                                nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
-                                for c in CUENTAS: nuevo_p[c] = 0.0
-                                st.session_state.provs_temp.append(nuevo_p)
+                                st.session_state.confirm_add_prov = True
                                 st.rerun()
+
+                    # Lógica de Confirmación de Adición
+                    if st.session_state.confirm_add_prov:
+                        with st.container(border=True):
+                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}' en la base de datos?", icon="ℹ️")
+                            ca_col1, ca_col2 = st.columns(2)
+                            with ca_col1:
+                                if st.button("❌ No", key="cancel_add_prov", use_container_width=True):
+                                    st.session_state.confirm_add_prov = False
+                                    st.rerun()
+                            with ca_col2:
+                                if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary", use_container_width=True):
+                                    nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
+                                    for c in CUENTAS: nuevo_p[c] = 0.0
+                                    st.session_state.provs_temp.append(nuevo_p)
+                                    
+                                    # Guardar directamente en DB como solicitó el usuario
+                                    df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                                    if guardar_config_db(df_prov_val):
+                                        st.session_state.proveedores_df = df_prov_val
+                                        st.session_state.confirm_add_prov = False
+                                        st.session_state.in_new_prov_int = "" # Limpiar el campo
+                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado con éxito")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Error al guardar en la base de datos.")
                 
                 if provs_seleccionados:
                     st.caption(f"✅ {len(provs_seleccionados)} proveedor(es) seleccionado(s)")
