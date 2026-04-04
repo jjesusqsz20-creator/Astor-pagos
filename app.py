@@ -496,8 +496,8 @@ try:
                     if valido:
                         st.session_state.usuario_logueado = valido
                         st.session_state.manual_logout = False # Resetear bandera al loguearse
-                        # Guardar cookie por 30 días para persistencia agresiva
-                        expires = datetime.now() + timedelta(days=30)
+                        # Guardar cookie por 7 días
+                        expires = datetime.now() + timedelta(days=7)
                         cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
                         st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
                         st.rerun()
@@ -1596,113 +1596,117 @@ if is_editor:
 
             # Callbacks para "Seleccionar Todo"
             # Callbacks para Sincronización de Checkboxes (Cuentas y Proveedores)
-            # --- DIÁLOGO PARA AÑADIR PROVEEDOR ---
-            @st.dialog("➕ Añadir Nuevo Proveedor")
-            def dialog_añadir_prov():
-                st.write("Ingresa el nombre del nuevo proveedor que deseas registrar en la base de datos.")
-                nuevo_n = st.text_input("Nombre del Proveedor", key="in_dialog_new_prov")
-                
-                if st.button("Registrar Proveedor", type="primary", use_container_width=True):
-                    nombre_clean = nuevo_n.strip()
-                    if not nombre_clean:
-                        st.error("❌ El nombre no puede estar vacío.")
-                    elif nombre_clean in nombres_prov_actuales:
-                        st.error("❌ Este proveedor ya existe.")
-                    else:
-                        nuevo_p = {"Nombre": nombre_clean, "Visible": True}
-                        for c in CUENTAS: nuevo_p[c] = 0.0
-                        st.session_state.provs_temp.append(nuevo_p)
-                        
-                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                        if guardar_config_db(df_prov_val):
-                            st.session_state.proveedores_df = df_prov_val
-                            st.toast(f"✅ {nombre_clean} registrado con éxito")
-                            st.rerun()
-                        else:
-                            st.error("❌ Error al guardar en la base de datos.")
+            def toggle_all_ctas():
+                val = st.session_state.p_all_cta_check_final
+                for c in CUENTAS:
+                    st.session_state[f"p_cta_cb_fin_{c}"] = val
 
-            # --- FILA DE SELECCIÓN ESTABLE (MULTISELECT NATAL) ---
+            def sync_cta_master():
+                # Si todas las individuales están marcadas, marcar el master. Si falta una, desmarcar.
+                all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
+                st.session_state.p_all_cta_check_final = all_sel
+
+            def toggle_all_provs():
+                val = st.session_state.p_all_prov_check_final
+                for p_item in st.session_state.provs_temp:
+                    p_name = p_item["Nombre"]
+                    if p_name.strip() != "":
+                        st.session_state[f"p_prov_cb_fin_{p_name}"] = val
+
+            def sync_prov_master():
+                # Obtener lista de nombres válidos actuales
+                nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""]
+                if not nombres_v:
+                    st.session_state.p_all_prov_check_final = False
+                    return
+                all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_v)
+                st.session_state.p_all_prov_check_final = all_sel
+            
+            # --- FILA DE SELECCIÓN COMPACTA (POPOVERS INTEGRADOS) ---
             col_cfg_1, col_cfg_2 = st.columns(2)
             
             with col_cfg_1:
-                st.markdown("**Cuentas a configurar**")
-                # Inicializar selección de cuentas si no existe
-                if "sel_cuentas_cfg" not in st.session_state:
-                    st.session_state.sel_cuentas_cfg = []
-                
-                cuentas_seleccionadas = st.multiselect(
-                    "Seleccionar Cuentas",
-                    options=CUENTAS,
-                    default=st.session_state.sel_cuentas_cfg,
-                    key="ms_cuentas_cfg",
-                    label_visibility="collapsed"
-                )
-                st.session_state.sel_cuentas_cfg = cuentas_seleccionadas
+                st.markdown("📂 **Cuentas a configurar**")
+                with st.container(height=300, border=True):
+                    st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
+                    cuentas_seleccionadas = []
+                    for c in CUENTAS:
+                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_cta_master):
+                            cuentas_seleccionadas.append(c)
+                if cuentas_seleccionadas:
+                    st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
             
             with col_cfg_2:
-                st.markdown("**Proveedores participantes**")
-                nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if str(p["Nombre"]).strip() != ""]
-                
-                # Inicializar selección de proveedores si no existe
-                if "sel_provs_cfg" not in st.session_state:
-                    st.session_state.sel_provs_cfg = []
-                
-                # Filtrar selección anterior por si se borraron proveedores
-                st.session_state.sel_provs_cfg = [p for p in st.session_state.sel_provs_cfg if p in nombres_v]
-                
-                provs_seleccionados = st.multiselect(
-                    "Seleccionar Proveedores",
-                    options=nombres_v,
-                    default=st.session_state.sel_provs_cfg,
-                    key="ms_provs_cfg",
-                    label_visibility="collapsed"
-                )
-                st.session_state.sel_provs_cfg = provs_seleccionados
-            
-            # --- ACCIONES DE GESTIÓN (BORRAR Y AÑADIR) ---
-            st.markdown("<br>", unsafe_allow_html=True)
-            m_col1, m_col2 = st.columns([2, 1])
-            with m_col2:
-                if st.button("➕ Añadir Nuevo Proveedor", use_container_width=True, type="secondary"):
-                    dialog_añadir_prov()
-            
-            # Lógica de Borrado (Permanente en el expander para no cerrar menús)
-            if provs_seleccionados:
-                with st.expander("🗑️ Zona de Eliminación", expanded=False):
-                    st.write("Selecciona un proveedor de los actuales para eliminarlo permanentemente.")
-                    for p_sel_name in provs_seleccionados:
-                        ecol1, ecol2 = st.columns([4, 1])
-                        with ecol1: st.write(f"**{p_sel_name}**")
-                        with ecol2:
-                            if st.button("Eliminar", key=f"del_stable_{p_sel_name}", type="primary", use_container_width=True):
-                                # Buscar índice en la lista maestra
-                                idx = next((i for i, p in enumerate(st.session_state.provs_temp) if p["Nombre"] == p_sel_name), None)
-                                if idx is not None:
-                                    st.session_state.confirm_delete_idx = idx
+                st.markdown("👤 **Proveedores participantes**")
+                with st.container(height=450, border=True):
+                    st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
+                    provs_seleccionados = []
+                    
+                    # Lista de proveedores con botón de borrar al lado
+                    for i, p_item in enumerate(st.session_state.provs_temp):
+                        p_name = p_item["Nombre"]
+                        if p_name.strip() == "": continue
+                        
+                        # Lógica de Confirmación de Borrado: Ocupar toda la fila para que se vea bien
+                        if st.session_state.confirm_delete_idx == i:
+                            with st.container(border=True):
+                                st.warning(f"¿Borrar {p_name} permanentemente?", icon="⚠️")
+                                col_c1, col_c2 = st.columns(2)
+                                with col_c1:
+                                    if st.button("❌ No", key=f"cancel_del_{i}", use_container_width=True):
+                                        st.session_state.confirm_delete_idx = None
+                                        st.rerun()
+                                with col_c2:
+                                    if st.button("✅ Sí", key=f"confirm_del_{i}", type="primary", use_container_width=True):
+                                        st.session_state.provs_temp.pop(i)
+                                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                                        if guardar_config_db(df_prov_val):
+                                            st.session_state.proveedores_df = df_prov_val
+                                            st.session_state.confirm_delete_idx = None
+                                            st.toast(f"🗑️ {p_name} eliminado")
+                                            st.rerun()
+                        else:
+                            r_col1, r_col2 = st.columns([5, 1])
+                            with r_col1:
+                                if st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_prov_master):
+                                    provs_seleccionados.append(p_name)
+                            with r_col2:
+                                if st.button("🗑", key=f"btn_del_prov_int_{i}", help=f"Eliminar {p_name}"):
+                                    st.session_state.confirm_delete_idx = i
                                     st.rerun()
-
-            if st.session_state.confirm_delete_idx is not None:
-                idx = st.session_state.confirm_delete_idx
-                p_name_del = st.session_state.provs_temp[idx]["Nombre"]
-                with st.container(border=True):
-                    st.warning(f"¿Confirmas que deseas borrar a **{p_name_del}** de la base de datos?", icon="⚠️")
-                    bcol1, bcol2 = st.columns(2)
-                    with bcol1:
-                        if st.button("❌ Cancelar", use_container_width=True):
-                            st.session_state.confirm_delete_idx = None
-                            st.rerun()
-                    with bcol2:
-                        if st.button("✅ Confirmar Borrado", type="primary", use_container_width=True):
-                            st.session_state.provs_temp.pop(idx)
-                            df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                            if guardar_config_db(df_prov_val):
-                                st.session_state.proveedores_df = df_prov_val
-                                st.session_state.confirm_delete_idx = None
-                                # Limpiar de la selección si estaba
-                                if p_name_del in st.session_state.sel_provs_cfg:
-                                    st.session_state.sel_provs_cfg.remove(p_name_del)
-                                st.toast(f"🗑️ {p_name_del} eliminado")
+                    
+                    st.divider()
+                    st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
+                    f_col1, f_col2 = st.columns([4, 1])
+                    with f_col1:
+                        nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
+                    with f_col2:
+                        if st.button("➕", key="btn_add_prov_int"):
+                            if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_prov_actuales:
+                                st.session_state.confirm_add_prov = True
                                 st.rerun()
+
+                    # Lógica de Confirmación de Adición (Interna en el contenedor)
+                    if st.session_state.confirm_add_prov:
+                        with st.container(border=True):
+                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}'?", icon="ℹ️")
+                            ca_col1, ca_col2 = st.columns(2)
+                            with ca_col1:
+                                if st.button("❌ No", key="cancel_add_prov", use_container_width=True):
+                                    st.session_state.confirm_add_prov = False
+                                    st.rerun()
+                            with ca_col2:
+                                if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary", use_container_width=True):
+                                    nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
+                                    for c in CUENTAS: nuevo_p[c] = 0.0
+                                    st.session_state.provs_temp.append(nuevo_p)
+                                    df_prov_val = pd.DataFrame(st.session_state.provs_temp)
+                                    if guardar_config_db(df_prov_val):
+                                        st.session_state.proveedores_df = df_prov_val
+                                        st.session_state.confirm_add_prov = False
+                                        st.session_state.in_new_prov_int = "" 
+                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
+                                        st.rerun()
                 
                 if provs_seleccionados:
                     st.caption(f"✅ {len(provs_seleccionados)} proveedor(es) seleccionado(s)")
