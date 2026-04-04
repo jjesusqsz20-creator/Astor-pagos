@@ -451,8 +451,13 @@ try:
     sheet_retorno_manual = db_sheets["retorno_manual"]
     sheet_audit = db_sheets["audit"]
     sheet = db_sheets["abonos"]
+except Exception as e:
+    st.error("❌ Error de Conexión: No se pudo conectar a Google Sheets.")
+    st.error(f"Detalle: {e}")
+    st.info("Asegúrate de haber compartido el archivo con el correo de servicio técnico y que el nombre sea 'Astor_Pagos_DB'.")
+    st.stop()
 
-    # --- MURO DE AUTENTICACIÓN ---
+# --- MURO DE AUTENTICACIÓN ---
     usuarios_db = obtener_usuarios_db(client)
     
     # Lógica de Autologin con Cookie (Sincronización agresiva V3)
@@ -560,11 +565,6 @@ try:
                 if st.button("⬅️ Ya tengo cuenta", use_container_width=True):
                     st.session_state.vista_auth = "login"; st.rerun()
         st.stop()
-except Exception as e:
-    st.error("❌ Error de Conexión: No se pudo conectar a Google Sheets.")
-    st.error(f"Detalle: {e}")
-    st.info("Asegúrate de haber compartido el archivo con el correo de servicio técnico y que el nombre sea 'Astor_Pagos_DB'.")
-    st.stop()
 
 # --- FUNCIONES DE ACCESO A DATOS ---
 @st.cache_data(ttl=60)
