@@ -1596,13 +1596,19 @@ if is_editor:
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
         with st.expander("Panel de Configuración de Proveedores"):
-            # Sincronización robusta: Siempre usar el DataFrame global como base si provs_temp no existe 
-            # o si el número de proveedores no coincide (señal de cambio externo o reciente)
+            # Sincronización robusta y DEDUPLICACIÓN
             if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
             
-            # Limpieza proactiva de nombres vacíos que puedan quedar en el diccionario
-            st.session_state.provs_temp = [p for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""]
+            # Limpieza proactiva y DEDUPLICACIÓN por nombre para evitar DuplicateWidgetID
+            temp_list = []
+            seen_names = set()
+            for p in st.session_state.provs_temp:
+                name = str(p.get("Nombre", "")).strip()
+                if name != "" and name not in seen_names:
+                    temp_list.append(p)
+                    seen_names.add(name)
+            st.session_state.provs_temp = temp_list
             
             # Estado para manejar la confirmación de eliminación y adición
             if "confirm_delete_idx" not in st.session_state:
@@ -1639,15 +1645,15 @@ if is_editor:
                 with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
                     @st.fragment
                     def content_proveedores():
-                        nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""]
+                        nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != ""]
                         
                         def sync_all_p():
                             val = st.session_state.master_provs
                             for n in nombres_v:
-                                st.session_state[f"p_prov_cb_fin_{n}"] = val
+                                st.session_state[f"p_prov_v5_cb_{n}"] = val
                         
                         def sync_ind_p():
-                            all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_v)
+                            all_sel = all(st.session_state.get(f"p_prov_v5_cb_{n}", False) for n in nombres_v)
                             st.session_state.master_provs = all_sel
 
                         st.markdown("**Proveedores participantes**")
@@ -1656,7 +1662,7 @@ if is_editor:
                         
                         for i, p_item in enumerate(st.session_state.provs_temp):
                             p_name = p_item["Nombre"]
-                            if p_name.strip() == "": continue
+                            if str(p_name).strip() == "": continue
                             
                             if st.session_state.confirm_delete_idx == i:
                                 with st.container(border=True):
@@ -1667,35 +1673,27 @@ if is_editor:
                                             st.session_state.confirm_delete_idx = None
                                     with c_d2:
                                         if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
-                                            # 1. Obtener nombre para limpiar rastro
                                             p_name_del = st.session_state.provs_temp[i]["Nombre"]
-                                            # 2. Quitarlo de la lista temporal
                                             st.session_state.provs_temp.pop(i)
-                                            # 3. Actualizar memoria global y DB
-                                            # Garantizamos que el DataFrame mantenga sus columnas aunque esté vacío
                                             df_new_v = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                             if guardar_config_db(df_new_v):
                                                 st.session_state.proveedores_df = df_new_v
-                                                # 4. Limpiar rastro de selección para que desaparezca de las tablas de arriba
-                                                st.session_state.pop(f"p_prov_cb_fin_{p_name_del}", None)
+                                                st.session_state.pop(f"p_prov_v5_cb_{p_name_del}", None) # Limpiar ID v5
                                                 st.session_state.confirm_delete_idx = None
                                                 st.toast(f"🗑️ {p_name_del} eliminado globalmente")
-                                                # Refresco total para limpiar las tablas de arriba
                                                 st.rerun()
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
-                                    st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_ind_p)
+                                    st.checkbox(p_name, key=f"p_prov_v5_cb_{p_name}", on_change=sync_ind_p)
                                 with r_c2:
                                     if st.button("🗑", key=f"b_del_{i}"):
                                         st.session_state.confirm_delete_idx = i
                         
-                        # 3. Añadir Nuevo Proveedor (con reseteo dinámico de campo)
                         st.divider()
                         st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                         f_col1, f_col2 = st.columns([4, 1])
                         
-                        # Usamos un contador para forzar el reseteo del widget cuando sea necesario
                         if "reset_prov_idx" not in st.session_state:
                             st.session_state.reset_prov_idx = 0
                             
@@ -1718,17 +1716,16 @@ if is_editor:
                                         nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
                                         for c in CUENTAS: nuevo_p[c] = 0.0
                                         st.session_state.provs_temp.append(nuevo_p)
-                                        # Garantizamos que el DataFrame mantenga sus columnas
                                         df_new_add = pd.DataFrame(st.session_state.provs_temp, columns=["Nombre", "Visible"] + CUENTAS)
                                         if guardar_config_db(df_new_add):
                                             st.session_state.proveedores_df = df_new_add
                                             st.session_state.confirm_add_prov = False
-                                            # Forzamos cambio de key para limpiar el campo sin usar session_state directamente
                                             st.session_state.reset_prov_idx += 1
                                             st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
                                             st.rerun()
                         
-                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != "" and st.session_state.get(f"p_prov_cb_fin_{p['Nombre']}", False)]
+                        # Sincronización final usando el mismo ID v5
+                        st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if str(p.get("Nombre", "")).strip() != "" and st.session_state.get(f"p_prov_v5_cb_{p['Nombre']}", False)]
                     
                     content_proveedores()
             
