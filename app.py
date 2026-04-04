@@ -316,10 +316,9 @@ if "usuario_logueado" not in st.session_state:
 if "manual_logout" not in st.session_state:
     st.session_state.manual_logout = False
 
-# Intentar autologin desde cookie (Persistencia de 4 hrs)
-session_cookie = cookie_manager.get('inside_session_email')
-if st.session_state.usuario_logueado is None:
-    pass
+# Sincronización de Autologin (Reintentos para evitar cierre de sesión en refresh)
+if "cookie_retries" not in st.session_state:
+    st.session_state.cookie_retries = 0
 
 if "vista_auth" not in st.session_state:
     st.session_state.vista_auth = "login"
@@ -445,17 +444,25 @@ try:
     # --- MURO DE AUTENTICACIÓN ---
     usuarios_db = obtener_usuarios_db(client)
     
-    # Lógica de Autologin con Cookie (Sincronización para Streamlit Cloud)
+    # Lógica de Autologin con Cookie (Sincronización robusta para Streamlit Cloud)
     # Solo intentar si el usuario no ha forzado un Logout manual en esta sesión
     if st.session_state.usuario_logueado is None and not st.session_state.manual_logout:
+        session_cookie = cookie_manager.get('inside_session_email')
+        
         if session_cookie:
-            usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == session_cookie.lower().strip()), None)
+            # Normalización robusta para búsqueda por email
+            email_c = str(session_cookie).lower().strip()
+            usuario_encontrado = next((u for u in usuarios_db if u["email"].lower().strip() == email_c), None)
+            
             if usuario_encontrado:
                 st.session_state.usuario_logueado = usuario_encontrado
+                st.session_state.cookie_retries = 0 # Resetear contador al tener éxito
                 st.rerun()
-        # Si no hay cookie pero tampoco hemos reintentado, esperar un tick para stx.CookieManager
-        elif not st.session_state.get('cookie_wait_done', False):
-            st.session_state.cookie_wait_done = True
+        
+        # Estrategia de reintentos: El componente CookieManager necesita tiempo para leer del navegador
+        # Tras un refresco, el contador permite hasta 3 intentos rápidos de sincronización.
+        elif st.session_state.cookie_retries < 3:
+            st.session_state.cookie_retries += 1
             st.rerun()
 
     if st.session_state.usuario_logueado is None:
