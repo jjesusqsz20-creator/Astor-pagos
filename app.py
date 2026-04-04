@@ -586,7 +586,6 @@ def guardar_config_db(df_prov):
             visible_str = "True" if r["Visible"] else "False"
             fila = [r["Nombre"], visible_str] + [float(r.get(c, 0.0)) for c in CUENTAS]
             sheet_config.append_row(fila)
-        obtener_config_db.clear()
         return True
     except Exception as e:
         return False
