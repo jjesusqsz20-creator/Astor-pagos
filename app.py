@@ -1598,72 +1598,47 @@ if is_editor:
             
             nombres_prov_actuales = sorted(list(set([p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""])))
 
-            # Callbacks para "Seleccionar Todo"
-            # Callbacks para Sincronización de Checkboxes (Cuentas y Proveedores)
-            def toggle_all_ctas():
-                val = st.session_state.p_all_cta_check_final
-                for c in CUENTAS:
-                    st.session_state[f"p_cta_cb_fin_{c}"] = val
+            # --- LÓGICA DE SINCRONIZACIÓN DINÁMICA (FRAGMENTOS) ---
+            @st.fragment
+            def fragment_cuentas():
+                def sync_all():
+                    val = st.session_state.master_ctas
+                    for c in CUENTAS:
+                        st.session_state[f"p_cta_cb_fin_{c}"] = val
+                
+                def sync_ind():
+                    all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
+                    st.session_state.master_ctas = all_sel
 
-            def sync_cta_master():
-                # Si todas las individuales están marcadas, marcar el master. Si falta una, desmarcar.
-                all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
-                st.session_state.p_all_cta_check_final = all_sel
+                with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
+                    st.markdown("**Cuentas a configurar**")
+                    st.checkbox("📍 Seleccionar todas", key="master_ctas", on_change=sync_all)
+                    for c in CUENTAS:
+                        st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_ind)
+                    
+                    st.session_state.cuentas_seleccionadas_final = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
+                
+                if st.session_state.cuentas_seleccionadas_final:
+                    st.caption(f"✅ {len(st.session_state.cuentas_seleccionadas_final)} cuenta(s) seleccionada(s)")
 
-            def toggle_all_provs():
-                val = st.session_state.p_all_prov_check_final
-                for p_item in st.session_state.provs_temp:
-                    p_name = p_item["Nombre"]
-                    if p_name.strip() != "":
-                        st.session_state[f"p_prov_cb_fin_{p_name}"] = val
-
-            def sync_prov_master():
-                # Obtener lista de nombres válidos actuales
+            @st.fragment
+            def fragment_proveedores():
                 nombres_v = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != ""]
-                if not nombres_v:
-                    st.session_state.p_all_prov_check_final = False
-                    return
-                all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_v)
-                st.session_state.p_all_prov_check_final = all_sel
-            
-            # --- FILA DE SELECCIÓN COMPACTA (POPOVERS INTEGRADOS) ---
-            col_cfg_1, col_cfg_2 = st.columns(2)
-            
-            with col_cfg_1:
-                st.markdown("**Cuentas a configurar**")
-                with st.popover("📂 Seleccionar Cuentas"):
-                    with st.form("frm_sel_ctas"):
-                        st.markdown("**Elige las cuentas**")
-                        # No usamos on_change en formularios para evitar errores de sincronización
-                        st.caption("Selecciona y presiona Confirmar")
-                        for c in CUENTAS:
-                            st.checkbox(c, key=f"p_cta_cb_fin_{c}")
-                        if st.form_submit_button("Confirmar Selección", use_container_width=True):
-                            pass # El rerun del botón ya actualiza la vista
-                    
-                    cuentas_seleccionadas = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
-                if cuentas_seleccionadas:
-                    st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
-            
-            with col_cfg_2:
-                st.markdown("**Proveedores participantes**")
-                with st.popover("👤 Seleccionar Proveedores"):
-                    # 1. Formulario para selección masiva sin que se cierre el menú
-                    with st.form("frm_sel_provs"):
-                        st.markdown("**Elige los proveedores**")
-                        for p_item in st.session_state.provs_temp:
-                            p_name = p_item["Nombre"]
-                            if p_name.strip() != "":
-                                st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}")
-                        if st.form_submit_button("Confirmar Selección", use_container_width=True):
-                            pass
-                    
-                    # 2. Lista de nombres seleccionados a partir de los estados de las casillas
-                    provs_seleccionados = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != "" and st.session_state.get(f"p_prov_cb_fin_{p['Nombre']}", False)]
+                
+                def sync_all_p():
+                    val = st.session_state.master_provs
+                    for n in nombres_v:
+                        st.session_state[f"p_prov_cb_fin_{n}"] = val
+                
+                def sync_ind_p():
+                    all_sel = all(st.session_state.get(f"p_prov_cb_fin_{n}", False) for n in nombres_v)
+                    st.session_state.master_provs = all_sel
 
-                    st.divider()
-                    st.markdown("**Acciones de Proveedor**")
-                    # Gestión de borrado y añadido fuera del formulario pero dentro del popover
+                with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
+                    st.markdown("**Proveedores participantes**")
+                    if nombres_v:
+                        st.checkbox("👥 Seleccionar todos", key="master_provs", on_change=sync_all_p)
+                    
                     for i, p_item in enumerate(st.session_state.provs_temp):
                         p_name = p_item["Nombre"]
                         if p_name.strip() == "": continue
@@ -1682,7 +1657,8 @@ if is_editor:
                                         st.session_state.confirm_delete_idx = None; st.rerun()
                         else:
                             r_c1, r_c2 = st.columns([5, 1])
-                            with r_c1: st.write(f"👤 {p_name}")
+                            with r_c1:
+                                st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_ind_p)
                             with r_c2:
                                 if st.button("🗑", key=f"b_del_{i}"):
                                     st.session_state.confirm_delete_idx = i; st.rerun()
@@ -1691,42 +1667,43 @@ if is_editor:
                     st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                     f_col1, f_col2 = st.columns([4, 1])
                     with f_col1:
-                        # Usar el estado directamente para el valor si es necesario, pero text_input lo maneja con su key
                         nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
                     with f_col2:
                         if st.button("➕", key="btn_add_prov_int"):
-                            if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_prov_actuales:
+                            if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_v:
                                 st.session_state.confirm_add_prov = True
                                 st.rerun()
 
-                    # Lógica de Confirmación de Adición
                     if st.session_state.confirm_add_prov:
                         with st.container(border=True):
-                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}' en la base de datos?", icon="ℹ️")
+                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}'?", icon="ℹ️")
                             ca_col1, ca_col2 = st.columns(2)
                             with ca_col1:
-                                if st.button("❌ No", key="cancel_add_prov", use_container_width=True):
-                                    st.session_state.confirm_add_prov = False
-                                    st.rerun()
+                                if st.button("❌ No", key="cancel_add_prov"):
+                                    st.session_state.confirm_add_prov = False; st.rerun()
                             with ca_col2:
-                                if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary", use_container_width=True):
+                                if st.button("✅ Sí", key="confirm_add_prov_btn", type="primary"):
                                     nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
                                     for c in CUENTAS: nuevo_p[c] = 0.0
                                     st.session_state.provs_temp.append(nuevo_p)
-                                    
-                                    # Guardar directamente en DB como solicitó el usuario
-                                    df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                                    if guardar_config_db(df_prov_val):
-                                        st.session_state.proveedores_df = df_prov_val
+                                    if guardar_config_db(pd.DataFrame(st.session_state.provs_temp)):
                                         st.session_state.confirm_add_prov = False
-                                        st.session_state.in_new_prov_int = "" # Limpiar el campo
-                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado con éxito")
+                                        st.session_state.in_new_prov_int = ""
+                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
                                         st.rerun()
-                                    else:
-                                        st.error("❌ Error al guardar en la base de datos.")
                 
-                if provs_seleccionados:
-                    st.caption(f"✅ {len(provs_seleccionados)} proveedor(es) seleccionado(s)")
+                st.session_state.provs_seleccionados_final = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != "" and st.session_state.get(f"p_prov_cb_fin_{p['Nombre']}", False)]
+                if st.session_state.provs_seleccionados_final:
+                    st.caption(f"✅ {len(st.session_state.provs_seleccionados_final)} proveedor(es) seleccionado(s)")
+            
+            col_cfg_1, col_cfg_2 = st.columns(2)
+            with col_cfg_1:
+                fragment_cuentas()
+            with col_cfg_2:
+                fragment_proveedores()
+            
+            cuentas_seleccionadas = st.session_state.get("cuentas_seleccionadas_final", [])
+            provs_seleccionados = st.session_state.get("provs_seleccionados_final", [])
             
             st.divider()
 
