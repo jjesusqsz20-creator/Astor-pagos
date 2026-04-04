@@ -1631,53 +1631,61 @@ if is_editor:
             
             with col_cfg_1:
                 st.markdown("**Cuentas a configurar**")
-                with st.popover("📂 Seleccionar Cuentas", key="p_popover_ctas", use_container_width=True):
-                    st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
-                    cuentas_seleccionadas = []
-                    for c in CUENTAS:
-                        if st.checkbox(c, key=f"p_cta_cb_fin_{c}", on_change=sync_cta_master):
-                            cuentas_seleccionadas.append(c)
+                with st.popover("📂 Seleccionar Cuentas"):
+                    with st.form("frm_sel_ctas"):
+                        st.markdown("**Elige las cuentas**")
+                        # No usamos on_change en formularios para evitar errores de sincronización
+                        st.caption("Selecciona y presiona Confirmar")
+                        for c in CUENTAS:
+                            st.checkbox(c, key=f"p_cta_cb_fin_{c}")
+                        if st.form_submit_button("Confirmar Selección", use_container_width=True):
+                            pass # El rerun del botón ya actualiza la vista
+                    
+                    cuentas_seleccionadas = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
                 if cuentas_seleccionadas:
                     st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
             
             with col_cfg_2:
                 st.markdown("**Proveedores participantes**")
-                with st.popover("👤 Seleccionar Proveedores", key="p_popover_provs", use_container_width=True):
-                    st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
-                    provs_seleccionados = []
+                with st.popover("👤 Seleccionar Proveedores"):
+                    # 1. Formulario para selección masiva sin que se cierre el menú
+                    with st.form("frm_sel_provs"):
+                        st.markdown("**Elige los proveedores**")
+                        for p_item in st.session_state.provs_temp:
+                            p_name = p_item["Nombre"]
+                            if p_name.strip() != "":
+                                st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}")
+                        if st.form_submit_button("Confirmar Selección", use_container_width=True):
+                            pass
                     
-                    # Lista de proveedores con botón de borrar al lado
+                    # 2. Lista de nombres seleccionados a partir de los estados de las casillas
+                    provs_seleccionados = [p["Nombre"] for p in st.session_state.provs_temp if p["Nombre"].strip() != "" and st.session_state.get(f"p_prov_cb_fin_{p['Nombre']}", False)]
+
+                    st.divider()
+                    st.markdown("**Acciones de Proveedor**")
+                    # Gestión de borrado y añadido fuera del formulario pero dentro del popover
                     for i, p_item in enumerate(st.session_state.provs_temp):
                         p_name = p_item["Nombre"]
                         if p_name.strip() == "": continue
                         
-                        # Lógica de Confirmación de Borrado: Ocupar toda la fila para que se vea bien
                         if st.session_state.confirm_delete_idx == i:
                             with st.container(border=True):
-                                st.warning(f"¿Borrar {p_name} permanentemente?", icon="⚠️")
-                                col_c1, col_c2 = st.columns(2) # Aquí sí funcionan porque no estamos dentro de r_col1/2
-                                with col_c1:
-                                    if st.button("❌ No", key=f"cancel_del_{i}", use_container_width=True):
-                                        st.session_state.confirm_delete_idx = None
-                                        st.rerun()
-                                with col_c2:
-                                    if st.button("✅ Sí", key=f"confirm_del_{i}", type="primary", use_container_width=True):
+                                st.warning(f"¿Borrar {p_name}?", icon="⚠️")
+                                c_d1, c_d2 = st.columns(2)
+                                with c_d1:
+                                    if st.button("❌ No", key=f"c_del_{i}"):
+                                        st.session_state.confirm_delete_idx = None; st.rerun()
+                                with c_d2:
+                                    if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
                                         st.session_state.provs_temp.pop(i)
-                                        df_prov_val = pd.DataFrame(st.session_state.provs_temp)
-                                        if guardar_config_db(df_prov_val):
-                                            st.session_state.proveedores_df = df_prov_val
-                                            st.session_state.confirm_delete_idx = None
-                                            st.toast(f"🗑️ {p_name} eliminado")
-                                            st.rerun()
+                                        guardar_config_db(pd.DataFrame(st.session_state.provs_temp))
+                                        st.session_state.confirm_delete_idx = None; st.rerun()
                         else:
-                            r_col1, r_col2 = st.columns([5, 1])
-                            with r_col1:
-                                if st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_prov_master):
-                                    provs_seleccionados.append(p_name)
-                            with r_col2:
-                                if st.button("🗑", key=f"btn_del_prov_int_{i}", help=f"Eliminar {p_name}"):
-                                    st.session_state.confirm_delete_idx = i
-                                    st.rerun()
+                            r_c1, r_c2 = st.columns([5, 1])
+                            with r_c1: st.write(f"👤 {p_name}")
+                            with r_c2:
+                                if st.button("🗑", key=f"b_del_{i}"):
+                                    st.session_state.confirm_delete_idx = i; st.rerun()
                     
                     st.divider()
                     st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
