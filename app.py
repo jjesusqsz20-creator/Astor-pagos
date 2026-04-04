@@ -1587,7 +1587,8 @@ if is_editor:
         st.markdown("<h4 style='margin-top: -0.5rem; color: #881337; font-weight: 800;'>⚙️ Gestión de Proveedores</h4>", unsafe_allow_html=True)
         
         with st.expander("Panel de Configuración de Proveedores"):
-            if "provs_temp" not in st.session_state:
+            # Sincronización proactiva: Si proveedores_df cambió fuera, actualizar provs_temp
+            if "provs_temp" not in st.session_state or len(st.session_state.provs_temp) != len(st.session_state.proveedores_df):
                 st.session_state.provs_temp = st.session_state.proveedores_df.to_dict('records')
             
             # Estado para manejar la confirmación de eliminación y adición
@@ -1653,13 +1654,20 @@ if is_editor:
                                             st.session_state.confirm_delete_idx = None
                                     with c_d2:
                                         if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
+                                            # 1. Obtener nombre para limpiar rastro
+                                            p_name_del = st.session_state.provs_temp[i]["Nombre"]
+                                            # 2. Quitarlo de la lista temporal
                                             st.session_state.provs_temp.pop(i)
+                                            # 3. Actualizar memoria global y DB
                                             df_new_v = pd.DataFrame(st.session_state.provs_temp)
                                             if guardar_config_db(df_new_v):
                                                 st.session_state.proveedores_df = df_new_v
+                                                # 4. Limpiar rastro de selección para que desaparezca de las tablas de arriba
+                                                st.session_state.pop(f"p_prov_cb_fin_{p_name_del}", None)
                                                 st.session_state.confirm_delete_idx = None
-                                                st.toast("🗑️ Proveedor eliminado globalmente")
-                                                # No usamos rerun para no cerrar el popover, el fragmento se refresca solo
+                                                st.toast(f"🗑️ {p_name_del} eliminado globalmente")
+                                                # Refresco total para limpiar las tablas de arriba
+                                                st.rerun()
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
