@@ -1469,35 +1469,35 @@ if is_editor:
                     st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
                     st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
                     
-                        df_h_ret_dash = obtener_datos_retorno()
-                        df_h_manual_dash = obtener_datos_retorno_manual()
+                    df_h_ret_dash = obtener_datos_retorno()
+                    df_h_manual_dash = obtener_datos_retorno_manual()
+                    
+                    if not df_h_ret_dash.empty:
+                        resumen_ret_dash = []
+                        sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                         
-                        if not df_h_ret_dash.empty:
-                            resumen_ret_dash = []
-                            sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
-                            
-                            for c in CUENTAS:
-                                nombre_c = c.split(" (")[0] if " (" in c else c
-                                banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
-                                df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
-                                total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
-                                total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
-                                retorno_auto_bruto = total_monto_prov - total_dif_inside
-                                sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
-                                sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                                resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
-                            
-                            df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
-                            st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
-                            st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
-                            st.divider()
-                        else:
-                            st.info("No hay retornos registrados en el periodo seleccionado.")
+                        for c in CUENTAS:
+                            nombre_c = c.split(" (")[0] if " (" in c else c
+                            banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
+                            df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
+                            total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
+                            total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
+                            retorno_auto_bruto = total_monto_prov - total_dif_inside
+                            sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
+                            sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
+                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
                         
-                        # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
-                        df_historial = obtener_datos()
-                        if not df_historial.empty and "Cuenta" in df_historial.columns:
-                            df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+                        df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
+                        st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
+                        st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+                        st.divider()
+                    else:
+                        st.info("No hay retornos registrados en el periodo seleccionado.")
+                    
+                    # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
+                    df_historial = obtener_datos()
+                    if not df_historial.empty and "Cuenta" in df_historial.columns:
+                        df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
             except Exception as e:
                 st.error(f"Error procesando el tablero: {e}")
     
