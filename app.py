@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import gspread
 import json
+import time
 from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime, timedelta
@@ -471,11 +472,13 @@ try:
             # Si no hay cookies, reintentar hasta 5 veces para dar tiempo al navegador
             if st.session_state.cookie_retries < 5:
                 st.session_state.cookie_retries += 1
+                time.sleep(0.3) # Pequeña espera para sincronización en la nube
                 st.rerun()
         except:
             # Fallback a reintento si get_all falla
             if st.session_state.cookie_retries < 5:
                 st.session_state.cookie_retries += 1
+                time.sleep(0.3)
                 st.rerun()
 
     if st.session_state.usuario_logueado is None:
@@ -500,6 +503,7 @@ try:
                         expires = datetime.now() + timedelta(days=7)
                         cookie_manager.set('inside_session_email', email_log.lower().strip(), expires_at=expires)
                         st.success(f"✅ ¡Bienvenido, {valido['nombre']}!")
+                        time.sleep(0.5) # Tiempo para que el navegador grabe la cookie
                         st.rerun()
                     else:
                         st.error("❌ Correo o contraseña incorrectos.")
@@ -992,9 +996,9 @@ is_factura = st.session_state.usuario_logueado.get('rol') == 'Colaborador'
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state.usuario_logueado = None
     st.session_state.vista_auth = "login"
-    st.session_state.manual_logout = True # Bloquear autologin hasta login manual
-    st.session_state.cookie_wait_done = False # Resetear espera de sincronización
+    st.session_state.manual_logout = True
     cookie_manager.delete('inside_session_email')
+    time.sleep(0.5)
     st.rerun()
 
 if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
@@ -1626,8 +1630,8 @@ if is_editor:
             col_cfg_1, col_cfg_2 = st.columns(2)
             
             with col_cfg_1:
-                st.markdown("📂 **Cuentas a configurar**")
-                with st.container(height=300, border=True):
+                st.markdown("**Cuentas a configurar**")
+                with st.popover("📂 Seleccionar Cuentas"):
                     st.checkbox("📍 Todas las Cuentas", key="p_all_cta_check_final", on_change=toggle_all_ctas)
                     cuentas_seleccionadas = []
                     for c in CUENTAS:
@@ -1637,8 +1641,8 @@ if is_editor:
                     st.caption(f"✅ {len(cuentas_seleccionadas)} cuenta(s) seleccionada(s)")
             
             with col_cfg_2:
-                st.markdown("👤 **Proveedores participantes**")
-                with st.container(height=450, border=True):
+                st.markdown("**Proveedores participantes**")
+                with st.popover("👤 Seleccionar Proveedores"):
                     st.checkbox("Todos los Proveedores", key="p_all_prov_check_final", on_change=toggle_all_provs)
                     provs_seleccionados = []
                     
@@ -1651,7 +1655,7 @@ if is_editor:
                         if st.session_state.confirm_delete_idx == i:
                             with st.container(border=True):
                                 st.warning(f"¿Borrar {p_name} permanentemente?", icon="⚠️")
-                                col_c1, col_c2 = st.columns(2)
+                                col_c1, col_c2 = st.columns(2) # Aquí sí funcionan porque no estamos dentro de r_col1/2
                                 with col_c1:
                                     if st.button("❌ No", key=f"cancel_del_{i}", use_container_width=True):
                                         st.session_state.confirm_delete_idx = None
@@ -1679,6 +1683,7 @@ if is_editor:
                     st.write("<small>Añadir Nuevo:</small>", unsafe_allow_html=True)
                     f_col1, f_col2 = st.columns([4, 1])
                     with f_col1:
+                        # Usar el estado directamente para el valor si es necesario, pero text_input lo maneja con su key
                         nuevo_nombre_int = st.text_input("Nombre", key="in_new_prov_int", label_visibility="collapsed")
                     with f_col2:
                         if st.button("➕", key="btn_add_prov_int"):
@@ -1686,10 +1691,10 @@ if is_editor:
                                 st.session_state.confirm_add_prov = True
                                 st.rerun()
 
-                    # Lógica de Confirmación de Adición (Interna en el contenedor)
+                    # Lógica de Confirmación de Adición
                     if st.session_state.confirm_add_prov:
                         with st.container(border=True):
-                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}'?", icon="ℹ️")
+                            st.warning(f"¿Registrar '{nuevo_nombre_int.strip()}' en la base de datos?", icon="ℹ️")
                             ca_col1, ca_col2 = st.columns(2)
                             with ca_col1:
                                 if st.button("❌ No", key="cancel_add_prov", use_container_width=True):
@@ -1700,13 +1705,17 @@ if is_editor:
                                     nuevo_p = {"Nombre": nuevo_nombre_int.strip(), "Visible": True}
                                     for c in CUENTAS: nuevo_p[c] = 0.0
                                     st.session_state.provs_temp.append(nuevo_p)
+                                    
+                                    # Guardar directamente en DB como solicitó el usuario
                                     df_prov_val = pd.DataFrame(st.session_state.provs_temp)
                                     if guardar_config_db(df_prov_val):
                                         st.session_state.proveedores_df = df_prov_val
                                         st.session_state.confirm_add_prov = False
-                                        st.session_state.in_new_prov_int = "" 
-                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado")
+                                        st.session_state.in_new_prov_int = "" # Limpiar el campo
+                                        st.toast(f"✅ {nuevo_nombre_int.strip()} registrado con éxito")
                                         st.rerun()
+                                    else:
+                                        st.error("❌ Error al guardar en la base de datos.")
                 
                 if provs_seleccionados:
                     st.caption(f"✅ {len(provs_seleccionados)} proveedor(es) seleccionado(s)")
