@@ -1498,99 +1498,93 @@ if is_editor:
                     df_historial = obtener_datos()
                     if not df_historial.empty and "Cuenta" in df_historial.columns:
                         df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
-            except Exception as e:
-                st.error(f"Error procesando el tablero: {e}")
+        except Exception as e:
+            st.error(f"Error procesando el tablero: {e}")
     
-            # --- LAS 5 TABLAS DE REPARTO (RESTAURADAS) ---
-            filas_resumen = []
-            for c in CUENTAS:
-                if " (" in c:
-                    nombre = c.split(" (")[0]
-                    banco = c.split(" (")[1].replace(")", "")
-                else:
-                    nombre = c; banco = ""
-                    
-                for idx, row_prov in prov_visibles.iterrows():
-                    p = row_prov["Nombre"]
-                    pct = float(row_prov.get(c, 0.0))
-                    if pct > 0:
-                        ingreso_cuenta = st.session_state.ingreso_mensual / 5.0
-                        base_reparto = ingreso_cuenta * 0.40
-                        pagos_a_realizar = base_reparto * (pct / 100.0)
-                        filas_resumen.append({
-                            "Nombre": nombre, "Cuenta": banco, "Clave_Original": c,
-                            "Ingreso": ingreso_cuenta, "Proveedor": p,
-                            "Porcentaje": f"{pct}%", "Pagos a realizar": pagos_a_realizar
-                        })
-            
-            if not filas_resumen:
-                df_resumen = pd.DataFrame(columns=["Nombre", "Cuenta", "Clave_Original", "Ingreso", "Proveedor", "Porcentaje", "Pagos a realizar"])
+        # --- LAS 5 TABLAS DE REPARTO (RESTAURADAS) ---
+        prov_visibles = df_prov[df_prov["Visible"] == True]
+        filas_resumen = []
+        for c in CUENTAS:
+            if " (" in c:
+                nombre = c.split(" (")[0]
+                banco = c.split(" (")[1].replace(")", "")
             else:
-                df_resumen = pd.DataFrame(filas_resumen)
-    
-            if not df_historial.empty:
-                df_historial["Monto Total"] = pd.to_numeric(df_historial["Monto Total"], errors='coerce').fillna(0)
-                pagos_agrupados = df_historial.groupby(["Cuenta", "Proveedor"])["Monto Total"].sum().reset_index()
-                pagos_agrupados.rename(columns={"Monto Total": "Pagado a proveedores", "Cuenta": "Clave_Original"}, inplace=True)
-                df_resumen = pd.merge(df_resumen, pagos_agrupados, on=["Clave_Original", "Proveedor"], how="left")
-                df_resumen["Pagado a proveedores"] = df_resumen["Pagado a proveedores"].fillna(0)
-            else:
-                df_resumen["Pagado a proveedores"] = 0.0
-    
-            if "Pagos a realizar" not in df_resumen.columns:
-                df_resumen["Pagos a realizar"] = 0.0
-            
-            df_resumen["Saldo pendiente"] = df_resumen["Pagos a realizar"] - df_resumen["Pagado a proveedores"]
-    
-            def semaforo_saldo(row):
-                pago, abono, saldo = row["Pagos a realizar"], row["Pagado a proveedores"], row["Saldo pendiente"]
-                pct = abono / pago if pago > 0 else 1.0
-                saldo_str = f"${saldo:,.2f}"
-                if pct <= 0.35: return f"🔴 {saldo_str}"
-                elif pct < 0.80: return f"🟡 {saldo_str}"
-                else: return f"🟢 {saldo_str}"
-    
-            for col in ["Ingreso", "Pagos a realizar", "Pagado a proveedores"]:
-                df_resumen[col + "_str"] = df_resumen[col].apply(lambda x: f"${x:,.2f}")
-            df_resumen["Saldo pendiente_str"] = df_resumen.apply(semaforo_saldo, axis=1)
-    
-            for c in CUENTAS:
-                df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
-                if df_cuenta.empty: continue
-                ingreso = df_cuenta.iloc[0]["Ingreso"]
-                total_pago = df_cuenta["Pagos a realizar"].sum()
-                total_abono = df_cuenta["Pagado a proveedores"].sum()
-                total_saldo = df_cuenta["Saldo pendiente"].sum()
+                nombre = c; banco = ""
                 
-                bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
-                logo_banco = "👤" # Emoji unificado para todos los usuarios/cuentas por solicitud
-                pct_str = f"({(total_abono/total_pago)*100:.0f}%)" if total_pago > 0 else "(0%)"
-                estado_saldo = "🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴")
-                
-                # He aumentado el padding a 60 y uso espacio normal para monospace.
-                # Monospace + white-space: pre + font-size: 0.8rem = Alineación perfecta en una línea
-                def pad_mono(text, length):
-                    return str(text).ljust(length)
+            for idx, row_prov in prov_visibles.iterrows():
+                p = row_prov["Nombre"]
+                pct = float(row_prov.get(c, 0.0))
+                if pct > 0:
+                    ingreso_cuenta = st.session_state.ingreso_mensual / 5.0
+                    base_reparto = ingreso_cuenta * 0.40
+                    pagos_a_realizar = base_reparto * (pct / 100.0)
+                    filas_resumen.append({
+                        "Nombre": nombre, "Cuenta": banco, "Clave_Original": c,
+                        "Ingreso": ingreso_cuenta, "Proveedor": p,
+                        "Porcentaje": f"{pct}%", "Pagos a realizar": pagos_a_realizar
+                    })
         
-                nombre_raw = f"{logo_banco} {c}"
-                nombre_col = pad_mono(nombre_raw, 48) # Ajuste final de ancho
-                m_ing = f"Ing:${ingreso:,.0f}"
-                m_pag = f"PAGO:${total_abono:,.0f}"
-                m_sal = f"Sal:{estado_saldo}${total_saldo:,.0f}"
-                
-                # Refresco forzado de cadena: Nombre | Ing | PAGO | Sal
-                titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
-                
-                with st.expander(titulo_expander, expanded=False):
-                    df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
-                    df_disp.rename(columns={
-                        "Pagos a realizar_str": "Pago a Realizar", 
-                        "Pagado a proveedores_str": "Pagado a proveedores", 
-                        "Saldo pendiente_str": "Saldo pendiente"
-                    }, inplace=True)
-                    st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
+        if not filas_resumen:
+            df_resumen = pd.DataFrame(columns=["Nombre", "Cuenta", "Clave_Original", "Ingreso", "Proveedor", "Porcentaje", "Pagos a realizar"])
+        else:
+            df_resumen = pd.DataFrame(filas_resumen)
+    
+        if not df_historial.empty:
+            df_historial["Monto Total"] = pd.to_numeric(df_historial["Monto Total"], errors='coerce').fillna(0)
+            pagos_agrupados = df_historial.groupby(["Cuenta", "Proveedor"])["Monto Total"].sum().reset_index()
+            pagos_agrupados.rename(columns={"Monto Total": "Pagado a proveedores", "Cuenta": "Clave_Original"}, inplace=True)
+            df_resumen = pd.merge(df_resumen, pagos_agrupados, on=["Clave_Original", "Proveedor"], how="left")
+            df_resumen["Pagado a proveedores"] = df_resumen["Pagado a proveedores"].fillna(0)
+        else:
+            df_resumen["Pagado a proveedores"] = 0.0
 
-if is_editor:
+        if "Pagos a realizar" not in df_resumen.columns:
+            df_resumen["Pagos a realizar"] = 0.0
+        
+        df_resumen["Saldo pendiente"] = df_resumen["Pagos a realizar"] - df_resumen["Pagado a proveedores"]
+
+        def semaforo_saldo(row):
+            pago, abono, saldo = row["Pagos a realizar"], row["Pagado a proveedores"], row["Saldo pendiente"]
+            pct = abono / pago if pago > 0 else 1.0
+            saldo_str = f"${saldo:,.2f}"
+            if pct <= 0.35: return f"🔴 {saldo_str}"
+            elif pct < 0.80: return f"🟡 {saldo_str}"
+            else: return f"🟢 {saldo_str}"
+
+        for col in ["Ingreso", "Pagos a realizar", "Pagado a proveedores"]:
+            df_resumen[col + "_str"] = df_resumen[col].apply(lambda x: f"${x:,.2f}")
+        df_resumen["Saldo pendiente_str"] = df_resumen.apply(semaforo_saldo, axis=1)
+    
+        for c in CUENTAS:
+            df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
+            if df_cuenta.empty: continue
+            ingreso = df_cuenta.iloc[0]["Ingreso"]
+            total_pago = df_cuenta["Pagos a realizar"].sum()
+            total_abono = df_cuenta["Pagado a proveedores"].sum()
+            total_saldo = df_cuenta["Saldo pendiente"].sum()
+            
+            bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
+            logo_banco = "👤" 
+            
+            def pad_mono(text, length):
+                return str(text).ljust(length)
+    
+            nombre_raw = f"{logo_banco} {c}"
+            nombre_col = pad_mono(nombre_raw, 48) 
+            m_ing = f"Ing:${ingreso:,.0f}"
+            m_pag = f"PAGO:${total_abono:,.0f}"
+            m_sal = f"Sal:{("🟢" if total_saldo <= 0 else ("🟡" if total_abono > 0 else "🔴"))}${total_saldo:,.0f}"
+            
+            titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
+            
+            with st.expander(titulo_expander, expanded=False):
+                df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
+                df_disp.rename(columns={
+                    "Pagos a realizar_str": "Pago a Realizar", 
+                    "Pagado a proveedores_str": "Pagado a proveedores", 
+                    "Saldo pendiente_str": "Saldo pendiente"
+                }, inplace=True)
+                st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
     # 5. GESTIÓN DE PROVEEDORES
     with st.container(border=True):
         # Franjita rosa para gestión
