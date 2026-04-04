@@ -1650,19 +1650,19 @@ if is_editor:
                                     c_d1, c_d2 = st.columns(2)
                                     with c_d1:
                                         if st.button("❌ No", key=f"c_del_{i}"):
-                                            st.session_state.confirm_delete_idx = None; st.rerun()
+                                            st.session_state.confirm_delete_idx = None
                                     with c_d2:
                                         if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
                                             st.session_state.provs_temp.pop(i)
                                             guardar_config_db(pd.DataFrame(st.session_state.provs_temp))
-                                            st.session_state.confirm_delete_idx = None; st.rerun()
+                                            st.session_state.confirm_delete_idx = None
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
                                     st.checkbox(p_name, key=f"p_prov_cb_fin_{p_name}", on_change=sync_ind_p)
                                 with r_c2:
                                     if st.button("🗑", key=f"b_del_{i}"):
-                                        st.session_state.confirm_delete_idx = i; st.rerun() # Seguimos necesitando rerun para refrescar el layout del fragmento
+                                        st.session_state.confirm_delete_idx = i
                         
                         # 3. Añadir Nuevo Proveedor (con reseteo dinámico de campo)
                         st.divider()
