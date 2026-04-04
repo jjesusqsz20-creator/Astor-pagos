@@ -1654,8 +1654,12 @@ if is_editor:
                                     with c_d2:
                                         if st.button("✅ Sí", key=f"f_del_{i}", type="primary"):
                                             st.session_state.provs_temp.pop(i)
-                                            guardar_config_db(pd.DataFrame(st.session_state.provs_temp))
-                                            st.session_state.confirm_delete_idx = None
+                                            df_new_v = pd.DataFrame(st.session_state.provs_temp)
+                                            if guardar_config_db(df_new_v):
+                                                st.session_state.proveedores_df = df_new_v
+                                                st.session_state.confirm_delete_idx = None
+                                                st.toast("🗑️ Proveedor eliminado globalmente")
+                                                # No usamos rerun para no cerrar el popover, el fragmento se refresca solo
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
@@ -1709,8 +1713,17 @@ if is_editor:
             with col_cfg_2:
                 render_popover_proveedores()
             
-            cuentas_seleccionadas = st.session_state.get("cuentas_seleccionadas_final", [])
-            provs_seleccionados = st.session_state.get("provs_seleccionados_final", [])
+            # Sincronización final: Actualizar el DataFrame global si los temporales cambiaron
+            # Esto asegura que la tabla de pagos y el resto de la app usen los datos frescos
+            if "cuentas_seleccionadas_final" in st.session_state:
+                cuentas_seleccionadas = st.session_state.cuentas_seleccionadas_final
+            else:
+                cuentas_seleccionadas = []
+                
+            if "provs_seleccionados_final" in st.session_state:
+                provs_seleccionados = st.session_state.provs_seleccionados_final
+            else:
+                provs_seleccionados = []
             
             st.divider()
 
