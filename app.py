@@ -1685,9 +1685,12 @@ if is_editor:
                             else:
                                 r_c1, r_c2 = st.columns([5, 1])
                                 with r_c1:
+                                    # Usamos un prefijo v5 único para evitar colisiones con rastros de sesiones anteriores
                                     st.checkbox(p_name, key=f"p_prov_v5_cb_{p_name}", on_change=sync_ind_p)
                                 with r_c2:
                                     if st.button("🗑", key=f"b_del_{i}"):
+                                        # EXCLUSIVIDAD: Si vamos a borrar, cancelamos cualquier intento de añadir
+                                        st.session_state.confirm_add_prov = False
                                         st.session_state.confirm_delete_idx = i
                         
                         st.divider()
@@ -1702,6 +1705,8 @@ if is_editor:
                         with f_col2:
                             if st.button("➕", key="btn_add_prov_int"):
                                 if nuevo_nombre_int.strip() and nuevo_nombre_int.strip() not in nombres_v:
+                                    # EXCLUSIVIDAD: Si vamos a añadir, cancelamos el borrado
+                                    st.session_state.confirm_delete_idx = None
                                     st.session_state.confirm_add_prov = True
 
                         if st.session_state.confirm_add_prov:
