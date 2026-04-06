@@ -1181,7 +1181,7 @@ if is_editor:
         st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([1, 1, 1.2])
+        c1, c2, c3 = st.columns([1.8, 0.8, 1.2])
         
         with c1:
             cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
