@@ -1181,7 +1181,7 @@ if is_editor:
         st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([1.8, 0.8, 1.2])
+        c1, c2, c3 = st.columns([1.8, 0.8, 1.0])
         
         with c1:
             cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
@@ -1214,7 +1214,7 @@ if is_editor:
             def update_pago():
                 st.session_state.monto_pago_val = st.session_state.pago_input
             
-            st.number_input(f"💰 Monto del Pago (${st.session_state.pago_input:,.2f} MXN)", 
+            st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.0f})", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago)
             monto_ingresado = st.session_state.monto_pago_val
