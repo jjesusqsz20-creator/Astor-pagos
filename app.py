@@ -167,6 +167,28 @@ st.markdown("""
     .stExpander details summary p {
         letter-spacing: -0.01rem !important;
     }
+
+    /* Estilo para los botones de popover (Ticket IDs) en los historiales para que parezcan badges */
+    div[data-testid="stExpander"] div[data-testid="stPopover"] > button {
+        background-color: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #1E3A8A !important;
+        font-weight: 900 !important;
+        border-radius: 8px !important;
+        padding: 4px 12px !important;
+        transition: all 0.2s ease-in-out !important;
+        width: 100% !important;
+        justify-content: center !important; /* Centrar contenido dentro del botón popover */
+    }
+    div[data-testid="stExpander"] div[data-testid="stPopover"] > button:hover {
+        background-color: #FFFFFF !important;
+        border-color: #3B82F6 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        transform: translateY(-1px) !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stPopover"] > button:active {
+        transform: translateY(0px) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1295,14 +1317,8 @@ if is_editor:
                         # Contenedor con borde para cada ticket
                         with st.container(border=True):
                             c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
-                            c_tk.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🎫 <b>{t_id}</b></p>", unsafe_allow_html=True)
-                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
-                            c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
-                            
-                            with st.popover("✏️ Editar Ticket", use_container_width=True):
+                            with c_tk:
+                                with st.popover(f"🎫 {t_id}", use_container_width=True):
                                     # Seccion de Edicion
                                     st.markdown("##### ✏️ Editar Registro")
                                     nueva_cta = st.selectbox("Cambiar Cuenta", CUENTAS, index=CUENTAS.index(row['Cuenta']) if row['Cuenta'] in CUENTAS else 0, key=f"edit_cta_{t_id}")
@@ -1332,6 +1348,12 @@ if is_editor:
                                         st.info("Sin ediciones previas.")
                                     else:
                                         st.dataframe(df_este_ticket[["Fecha", "Usuario", "Accion", "Dato_Anterior", "Dato_Nuevo"]], use_container_width=True, hide_index=True)
+
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
+                            c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
 
 # 3. RETORNO ENTREGADO
 
@@ -1420,13 +1442,8 @@ if is_editor or is_factura:
                         tm_id = str(row.get('Ticket', '---'))
                         with st.container(border=True):
                             c_tk, c_f, c_p, c_m, c_e = st.columns(CM_PESOS)
-                            c_tk.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🎫 <b>{tm_id}</b></p>", unsafe_allow_html=True)
-                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
-                            
-                            with c_e:
-                                with st.popover("✏️ Editar", use_container_width=True):
+                            with c_tk:
+                                with st.popover(f"🎫 {tm_id}", use_container_width=True):
                                     st.markdown("##### ✏️ Editar Retorno Manual")
                                     st.info(f"Ticket: {tm_id}")
                                     
@@ -1439,6 +1456,10 @@ if is_editor or is_factura:
                                                 st.rerun()
                                             else:
                                                 st.error("❌ Error al actualizar.")
+
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
 
 
 
