@@ -156,10 +156,10 @@ st.markdown("""
         color: #1F2937 !important;
     }
 
-    /* Aumento de tamaño GLOBAL para etiquetas de campos (Inputs y Selects) */
+    /* Tamaño optimizado para etiquetas para evitar saltos de línea */
     [data-testid="stNumberInput"] label p,
     [data-testid="stSelectbox"] label p {
-        font-size: 1.15rem !important;
+        font-size: 1.08rem !important;
         font-weight: 800 !important;
         color: #1E3A8A !important;
     }
@@ -1181,7 +1181,7 @@ if is_editor:
         st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([1.8, 0.8, 1.0])
+        c1, c2, c3 = st.columns([1.7, 0.7, 1.3])
         
         with c1:
             cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
@@ -1214,7 +1214,7 @@ if is_editor:
             def update_pago():
                 st.session_state.monto_pago_val = st.session_state.pago_input
             
-            st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.0f})", 
+            st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.2f} MXN)", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago)
             monto_ingresado = st.session_state.monto_pago_val
