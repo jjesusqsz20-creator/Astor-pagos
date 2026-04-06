@@ -175,10 +175,13 @@ st.markdown("""
         color: #1E3A8A !important;
         font-weight: 900 !important;
         border-radius: 8px !important;
-        padding: 4px 12px !important;
+        padding: 4px 6px !important;
         transition: all 0.2s ease-in-out !important;
         width: 100% !important;
-        justify-content: center !important; /* Centrar contenido dentro del botón popover */
+        justify-content: center !important; 
+        white-space: nowrap !important; /* No permitir salto de línea */
+        min-width: 0px !important;
+        overflow: hidden !important;
     }
     div[data-testid="stExpander"] div[data-testid="stPopover"] > button:hover {
         background-color: #FFFFFF !important;
@@ -1299,7 +1302,7 @@ if is_editor:
                         
                 st.divider()
                 # Pesos de columna sincronizados para cabecera y filas
-                COL_PESOS = [0.6, 0.9, 1.8, 1.2, 0.9, 1.4]
+                COL_PESOS = [1.0, 1.0, 1.6, 1.1, 0.9, 1.2]
                 
                 c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
                 c_tk.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Ticket</b></p>", unsafe_allow_html=True)
@@ -1426,14 +1429,13 @@ if is_editor or is_factura:
                         
                 st.divider()
                 # Pesos de columna sincronizados para cabecera y filas
-                CM_PESOS = [0.6, 0.9, 2.2, 1.0, 0.8]
+                CM_PESOS = [1.0, 1.2, 2.0, 1.3]
                 
-                cm_tk, cm_f, cm_p, cm_m, cm_e = st.columns(CM_PESOS)
+                cm_tk, cm_f, cm_p, cm_m = st.columns(CM_PESOS)
                 cm_tk.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Ticket</b></p>", unsafe_allow_html=True)
                 cm_f.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Fecha</b></p>", unsafe_allow_html=True)
                 cm_p.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Registrado por</b></p>", unsafe_allow_html=True)
                 cm_m.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Monto</b></p>", unsafe_allow_html=True)
-                cm_e.markdown("<p style='text-align: center; margin: 0; display: block;'><b>Acción</b></p>", unsafe_allow_html=True)
                 st.divider()
                 
                 if df_m_filtrado.empty: st.info("No se encontraron registros.")
@@ -1441,7 +1443,7 @@ if is_editor or is_factura:
                     for idx, row in df_m_filtrado.iterrows():
                         tm_id = str(row.get('Ticket', '---'))
                         with st.container(border=True):
-                            c_tk, c_f, c_p, c_m, c_e = st.columns(CM_PESOS)
+                            c_tk, c_f, c_p, c_m = st.columns(CM_PESOS)
                             with c_tk:
                                 with st.popover(f"🎫 {tm_id}", use_container_width=True):
                                     st.markdown("##### ✏️ Editar Retorno Manual")
