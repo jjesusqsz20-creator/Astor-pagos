@@ -1094,14 +1094,13 @@ st.write("<br>", unsafe_allow_html=True)
 # --- DASHBOARD LAYOUT (Centered Rows) ---
 col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
 
-def render_metric_card(col, title, value, border_color, border_pos="top"):
-    border_style = f"border-{border_pos}: 5px solid {border_color};"
+def render_metric_card(col, title, value, border_color):
     html_card = f"""
     <body style="margin:0; padding:0; overflow:hidden; background: linear-gradient(135deg, #F0F2F5 0%, #E2E8F0 100%) !important;">
     <div style="
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         border-radius: 12px;
-        {border_style}
+        border-top: 5px solid {border_color};
         padding: 20px;
         background: white;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05);
@@ -1126,15 +1125,15 @@ semaforo_m = "🟢" if adeudo <= 0 else "🔴"
 # Fila 1: 3 cuadros (Solo Administradores)
 if is_editor:
     col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
-    render_metric_card(col_r1_1, "Pago total a proveedor", t_abonado, "#3b82f6", border_pos="top")
-    render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b", border_pos="top")
-    render_metric_card(col_r1_3, "Diferencia Inside", dif_ret, "#ef4444", border_pos="bottom")
+    render_metric_card(col_r1_1, "Pago total a proveedor", t_abonado, "#3b82f6") # Azul
+    render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
+    render_metric_card(col_r1_3, "Diferencia Inside", dif_ret, "#ef4444") # Rojo
 
 # Fila 2: 2 cuadros centrados
 st.write("<br>", unsafe_allow_html=True)
 col_r2_space1, col_r2_1, col_r2_2, col_r2_space2 = st.columns([1, 2, 2, 1])
-render_metric_card(col_r2_1, "Retorno entregado", t_manual, "#10b981", border_pos="top")
-render_metric_card(col_r2_2, f"{semaforo_m} Diferencia Proveedor", adeudo, color_adeudo, border_pos="bottom")
+render_metric_card(col_r2_1, "Retorno entregado", t_manual, "#10b981") # Verde
+render_metric_card(col_r2_2, f"{semaforo_m} Diferencia Proveedor", adeudo, color_adeudo) # Dinámico
 st.write("<br>", unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
@@ -1147,25 +1146,25 @@ def obtener_auditoria():
     except: return pd.DataFrame(columns=cols)
 
 if is_editor:
-    # 1. PRONÓSTICO DE INGRESO Y 2. REGISTRO DE PAGO
-    col_f1, col_f2 = st.columns([1, 1], gap="medium")
-    
-    with col_f1:
-        with st.container(border=True):
-            # Franjita azul claro (estilo métricas) arriba
-            st.markdown('<div style="background-color: #60A5FA; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-            st.markdown("<h5 style='margin-top: -0.5rem; margin-bottom: 1rem; color: #364350; font-weight: 800;'>📈 Pronóstico de Ingreso</h5>", unsafe_allow_html=True)
-            
-            def reload_ingreso():
-                st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+    st.write("<br>", unsafe_allow_html=True)
+    # 1. PRONÓSTICO DE INGRESO
+    with st.container(border=True):
+        # Franjita azul claro (estilo métricas)
+        st.markdown('<div style="background-color: #60A5FA; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h4 style='margin-top: -0.5rem; margin-bottom: 1.5rem; color: #1e3a8a; font-weight: 800;'>📈 SECCIÓN 1: Pronóstico de Ingreso</h4>", unsafe_allow_html=True)
+        
+        col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+        
+        def reload_ingreso():
+            st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
 
+        with col_p2:
             meses_lista = list(MESES_MAP.values())
-            c_p1, c_p2 = st.columns(2)
-            with c_p1:
-                st.selectbox("Mes", meses_lista, key="sel_mes", on_change=reload_ingreso)
-            with c_p2:
-                st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
+            st.selectbox("Mes", meses_lista, key="sel_mes", on_change=reload_ingreso)
+        with col_p3:
+            st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
 
+        with col_p1:
             def update_ingreso_persistente():
                 monto_nuevo = st.session_state.ing_input
                 st.session_state.ingreso_mensual = monto_nuevo
@@ -1173,50 +1172,75 @@ if is_editor:
             
             st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
                             step=1000.0, key="ing_input", on_change=update_ingreso_persistente)
+            nuevo_ingreso = st.session_state.ingreso_mensual
     
-    with col_f2:
-        with st.container(border=True):
-            st.markdown("<h5 style='margin-top: 0rem; color: #364350; font-weight: 800;'>📝 Registro de pago a proveedor</h5>", unsafe_allow_html=True)
-            st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
-            
-            st.write("<br>", unsafe_allow_html=True)
-            cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
-            
-            c_p1, c_p2 = st.columns([1, 1])
-            with c_p1:
-                prov_df = st.session_state.proveedores_df
-                if prov_df.empty:
-                    lista_prov_form = []
-                else:
-                    try:
-                        prov_validos = prov_df[(prov_df["Visible"] == True) & (prov_df[cuenta_seleccionada] > 0)]
-                        lista_prov_form = prov_validos["Nombre"].unique().tolist()
-                    except KeyError:
-                        lista_prov_form = []
-                
-                if not lista_prov_form:
-                    st.warning(f"⚠️ No hay proveedores.")
-                    proveedor_seleccionado = None
-                else:
-                    proveedor_seleccionado = st.selectbox("Proveedor Destino", lista_prov_form, key=f"abono_prov_{cuenta_seleccionada}")
+    st.write("<br>", unsafe_allow_html=True)
+    st.divider()
+    st.write("<br>", unsafe_allow_html=True)
 
-            with c_p2:
-                def update_pago():
-                    st.session_state.monto_pago_val = st.session_state.pago_input
-                
-                st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.2f} MXN)", 
-                                min_value=0.01, step=100.0, 
-                                key="pago_input", on_change=update_pago)
-                monto_ingresado = st.session_state.monto_pago_val
+    # 2. REGISTRO DE PAGO A PROVEEDOR
+    with st.container(border=True):
+        # Franjita verde
+        st.markdown('<div style="background-color: #10b981; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+        st.markdown("<h4 style='margin-top: -0.5rem; color: #065f46; font-weight: 800;'>📝 SECCIÓN 2: Registro de pago a proveedor</h4>", unsafe_allow_html=True)
+        st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
+        
+        st.write("<br>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([1.7, 0.7, 1.3])
+        
+        with c1:
+            cuenta_seleccionada = st.selectbox("Nombre / Cuenta Bancaria", CUENTAS)
+        with c2:
+            prov_df = st.session_state.proveedores_df
+            # Identificar columna del porcentaje para la cuenta seleccionada
+            col_pct = cuenta_seleccionada
             
-            st.write("<br>", unsafe_allow_html=True)
-            if st.button("Guardar Registro", type="primary", use_container_width=True):
-                if not proveedor_seleccionado:
-                    st.error("Debes seleccionar un proveedor válido.")
-                elif monto_ingresado <= 0:
-                    st.warning("El monto debe ser mayor a 0.")
+            # Filtro: Mostrar solo proveedores visibles Y que tengan porcentaje > 0 en esta cuenta
+            # Añadimos protección contra DataFrame vacío
+            if prov_df.empty:
+                prov_validos = pd.DataFrame(columns=["Nombre", "Visible"] + CUENTAS)
+                lista_prov_form = []
+            else:
+                try:
+                    prov_validos = prov_df[(prov_df["Visible"] == True) & (prov_df[col_pct] > 0)]
+                    lista_prov_form = prov_validos["Nombre"].unique().tolist()
+                except KeyError:
+                    prov_validos = pd.DataFrame(columns=["Nombre", "Visible"] + CUENTAS)
+                    lista_prov_form = []
+            
+            if not lista_prov_form:
+                st.warning(f"⚠️ No hay proveedores configurados para {cuenta_seleccionada}.")
+                proveedor_seleccionado = None
+            else:
+                proveedor_seleccionado = st.selectbox("Proveedor Destino", lista_prov_form, key=f"abono_prov_{cuenta_seleccionada}")
+                pct_actual = prov_validos[prov_validos["Nombre"] == proveedor_seleccionado][col_pct].iloc[0]
+
+        with c3:
+            def update_pago():
+                st.session_state.monto_pago_val = st.session_state.pago_input
+            
+            st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.2f} MXN)", 
+                            min_value=0.01, step=100.0, 
+                            key="pago_input", on_change=update_pago)
+            monto_ingresado = st.session_state.monto_pago_val
+        
+        st.write("<br>", unsafe_allow_html=True)
+        btn_guardar = st.button("Guardar Registro", type="primary", use_container_width=True)
+        
+        if btn_guardar:
+            if not proveedor_seleccionado:
+                st.error("Debes seleccionar un proveedor válido con reparto activo (>0%).")
+            elif monto_ingresado <= 0:
+                st.warning("El monto debe ser mayor a 0.")
+            else:
+                # Validación de seguridad final para evitar registros "fantasma"
+                pct_final = prov_df[prov_df["Nombre"] == proveedor_seleccionado][cuenta_seleccionada].iloc[0]
+                
+                if pct_final <= 0:
+                    st.error(f"❌ Error crítico: El proveedor {proveedor_seleccionado} no tiene permisos para esta cuenta (0%).")
                 else:
-                    with st.spinner("Guardando..."):
+                    with st.spinner("Guardando Pago y Retorno en la Nube..."):
+                        # Usar una bandera para el refresco fuera del try
                         exito_guardado = False
                         try:
                             id_abono = registrar_pago(cuenta_seleccionada, proveedor_seleccionado, float(monto_ingresado))
@@ -1227,14 +1251,11 @@ if is_editor:
                             registrar_retorno(nombre_tit, banco_tit, proveedor_seleccionado, float(monto_ingresado), float(dif_calculada), float(neto_retorno), ref_abono=id_abono)
                             exito_guardado = True
                         except Exception as e:
-                            st.error(f"❌ Error: {e}")
+                            st.error(f"❌ Error al guardar en base de datos: {e}")
                         
                         if exito_guardado:
-                            st.success(f"✅ ¡Registro exitoso!")
+                            st.success(f"✅ ¡Pago y Retorno de ${monto_ingresado:,.2f} MXN registrados!")
                             st.rerun()
-
-            # Franjita verde abajo (simetría)
-            st.markdown('<div style="background-color: #10b981; height: 6px; margin: 1rem -1.0rem -1.0rem -1.0rem; border-radius: 0 0 10px 10px;"></div>', unsafe_allow_html=True)
 
         # --- HISTORIAL DE PAGO A PROVEEDOR (DESPLEGABLE) ---
         st.markdown('<div id="historial-abonos"></div>', unsafe_allow_html=True)
