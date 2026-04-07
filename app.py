@@ -1460,7 +1460,7 @@ if is_editor:
                                     
                                     st.divider()
                                     if not es_inactivo:
-                                        if st.button("🗑️ Inactivar Registro", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
+                                        if st.button("🗑️", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 if inactivar_pago(t_id, nombre_u):
@@ -1588,7 +1588,7 @@ if is_editor or is_factura:
                                     
                                     st.divider()
                                     if not es_inactivo_m:
-                                        if st.button("🗑️ Inactivar Retorno", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
+                                        if st.button("🗑️", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 if inactivar_retorno_manual(tm_id, nombre_u):
