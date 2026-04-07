@@ -649,11 +649,19 @@ def obtener_ingreso_periodo(mes, anio):
 
 def guardar_ingreso_periodo(mes, anio, monto):
     try:
-        # Guardamos siempre como nueva fila para mantener trazabilidad de cambios
-        sheet_config_ingresos.append_row([mes, str(anio), monto])
+        # Intento de re-conexión proactiva si algo falla
+        if 'sheet_config_ingresos' not in globals() or sheet_config_ingresos is None:
+            db = get_db_sheets(client)
+            globals()['sheet_config_ingresos'] = db["config_ingresos"]
+            
+        sheet_config_ingresos.append_row([str(mes), str(anio), float(monto)])
         obtener_todos_ingresos_periodo.clear()
+        st.session_state.error_tecnico = None
         return True
-    except: return False
+    except Exception as e:
+        st.session_state.error_tecnico = str(e)
+        print(f"Error crítico al guardar ingreso: {e}")
+        return False
 
 def obtener_datos_resiliente(_sheet_obj, expected_cols):
     try:
@@ -1134,6 +1142,9 @@ if "pago_input" not in st.session_state:
 if "ret_input_monto" not in st.session_state or st.session_state.ret_input_monto == 0:
     st.session_state.ret_input_monto = 50000.0
 
+if "error_tecnico" not in st.session_state:
+    st.session_state.error_tecnico = None
+
 # Sincronización para etiquetas (labels)
 st.session_state.monto_pago_val = st.session_state.pago_input
 st.session_state.monto_retorno_val = st.session_state.ret_input_monto
@@ -1261,6 +1272,8 @@ if is_editor:
                 st.rerun()
             else:
                 st.error("❌ Error al guardar en la base de datos.")
+                if st.session_state.error_tecnico:
+                    st.warning(f"🔧 Detalle Técnico: {st.session_state.error_tecnico}")
     
     st.divider()
 
