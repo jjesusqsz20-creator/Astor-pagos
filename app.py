@@ -1722,16 +1722,16 @@ if is_editor:
             retorno_calc = total_monto_bruto - total_dif_inside
             sem_ret = "🟢" if retorno_calc <= 0 else "🔴"
             
-            # Datos de Saldo (Lo que falta por cubrir en el reparto del 100%)
+            # Datos de Saldo (Monto total presupuestado y lo que resta por pagar)
             df_c_res = df_resumen[df_resumen["Clave_Original"] == c]
-            total_saldo_pend = df_c_res["Saldo pendiente"].sum() if not df_c_res.empty else 0.0
+            total_budget = df_c_res["Pagos a realizar"].sum() if not df_c_res.empty else 0.0
             
-            saldo_calc = total_saldo_pend - total_monto_bruto
+            saldo_calc = total_budget - total_monto_bruto
             resumen_ret_dash.append({
                 "# de cuenta": i,
                 "Nombre": nombre_c,
                 "Cuenta": banco_c,
-                "Saldo por cubrir al proveedor": f"${total_saldo_pend:,.2f}",
+                "Saldo por cubrir al proveedor": f"${total_budget:,.2f}",
                 "Total a Pagar a Proveedor": f"${total_monto_bruto:,.2f}",
                 "Saldo por cubrir": f"${saldo_calc:,.2f}",
                 "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
