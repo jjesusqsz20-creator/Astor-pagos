@@ -1525,33 +1525,8 @@ if is_editor:
                     
                     if not df_h_ret_dash.empty:
                         # AUDITORÍA: Ver todos los retornos que tengan impacto en saldos (independiente de la selección actual)
-                        resumen_ret_dash = []
-                        sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
-                        
-                        for i, c in enumerate(CUENTAS, 1):
-                            nombre_c = c.split(" (")[0] if " (" in c else c
-                            banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
-                            df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
-                            total_monto_prov = pd.to_numeric(df_c["Monto Total"], errors='coerce').fillna(0).sum()
-                            total_dif_inside = pd.to_numeric(df_c["Diferencia"], errors='coerce').fillna(0).sum()
-                            retorno_auto_bruto = total_monto_prov - total_dif_inside
-                            sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
-                            sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                            
-                            resumen_ret_dash.append({
-                                "# de cuenta": i,
-                                "Nombre": nombre_c,
-                                "Cuenta": banco_c,
-                                "Saldo por cubrir al proveedor": f"${total_monto_prov:,.2f}",
-                                "Total a Pagar a Proveedor": f"${total_monto_prov:,.2f}",
-                                "Saldo por cubrir": "-",
-                                "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
-                                "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"
-                            })
-                        
-                        df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
-                        st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
-                        st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+                        # (Lógica de tabla movida abajo para esperar cálculo de saldos)
+                        pass
                         st.divider()
                     else:
                         st.info("No hay retornos registrados en el periodo seleccionado.")
@@ -1615,6 +1590,39 @@ if is_editor:
         for col in ["Ingreso", "Pagos a realizar", "Pagado a proveedores"]:
             df_resumen[col + "_str"] = df_resumen[col].apply(lambda x: f"${x:,.2f}")
         df_resumen["Saldo pendiente_str"] = df_resumen.apply(semaforo_saldo, axis=1)
+        
+        # --- TABLA DE RESUMEN SINCRONIZADA ---
+        resumen_ret_dash = []
+        for i, c in enumerate(CUENTAS, 1):
+            nombre_c = c.split(" (")[0] if " (" in c else c
+            banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
+            
+            # Datos de Auditoría (Ingresos brutos y Diferencias)
+            df_c_audit = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
+            total_monto_bruto = pd.to_numeric(df_c_audit["Monto Total"], errors='coerce').fillna(0).sum()
+            total_dif_inside = pd.to_numeric(df_c_audit["Diferencia"], errors='coerce').fillna(0).sum()
+            retorno_calc = total_monto_bruto - total_dif_inside
+            sem_ret = "🟢" if retorno_calc <= 0 else "🔴"
+            
+            # Datos de Saldo (Lo que falta por cubrir en el reparto del 100%)
+            df_c_res = df_resumen[df_resumen["Clave_Original"] == c]
+            total_saldo_pend = df_c_res["Saldo pendiente"].sum() if not df_c_res.empty else 0.0
+            
+            resumen_ret_dash.append({
+                "# de cuenta": i,
+                "Nombre": nombre_c,
+                "Cuenta": banco_c,
+                "Saldo por cubrir al proveedor": f"${total_saldo_pend:,.2f}",
+                "Total a Pagar a Proveedor": f"${total_monto_bruto:,.2f}",
+                "Saldo por cubrir": "-",
+                "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
+                "Retorno por pagar": f"{sem_ret} ${retorno_calc:,.2f}"
+            })
+        
+        df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
+        st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
+        st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+        st.divider()
     
         for c in CUENTAS:
             df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
