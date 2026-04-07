@@ -1146,12 +1146,11 @@ def obtener_auditoria():
     except: return pd.DataFrame(columns=cols)
 
 if is_editor:
-    st.write("<br>", unsafe_allow_html=True)
     # 1. PRONÓSTICO DE INGRESO
     with st.container(border=True):
         # Franjita azul claro (estilo métricas)
         st.markdown('<div style="background-color: #60A5FA; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-        st.markdown("<h4 style='margin-top: -0.5rem; margin-bottom: 1.5rem; color: #1e3a8a; font-weight: 800;'>📈 SECCIÓN 1: Pronóstico de Ingreso</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='margin-top: -0.5rem; margin-bottom: 1.5rem; color: #1e3a8a; font-weight: 800;'>📈 Pronóstico de Ingreso</h4>", unsafe_allow_html=True)
         
         col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
         
@@ -1174,15 +1173,13 @@ if is_editor:
                             step=1000.0, key="ing_input", on_change=update_ingreso_persistente)
             nuevo_ingreso = st.session_state.ingreso_mensual
     
-    st.write("<br>", unsafe_allow_html=True)
     st.divider()
-    st.write("<br>", unsafe_allow_html=True)
 
     # 2. REGISTRO DE PAGO A PROVEEDOR
     with st.container(border=True):
         # Franjita verde
         st.markdown('<div style="background-color: #10b981; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-        st.markdown("<h4 style='margin-top: -0.5rem; color: #065f46; font-weight: 800;'>📝 SECCIÓN 2: Registro de pago a proveedor</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='margin-top: -0.5rem; color: #065f46; font-weight: 800;'>📝 Registro de pago a proveedor</h4>", unsafe_allow_html=True)
         st.write("<small>Selecciona la cuenta, el proveedor al que se le paga y el monto del pago realizado.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
