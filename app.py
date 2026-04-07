@@ -1608,13 +1608,14 @@ if is_editor:
             df_c_res = df_resumen[df_resumen["Clave_Original"] == c]
             total_saldo_pend = df_c_res["Saldo pendiente"].sum() if not df_c_res.empty else 0.0
             
+            saldo_calc = total_saldo_pend - total_monto_bruto
             resumen_ret_dash.append({
                 "# de cuenta": i,
                 "Nombre": nombre_c,
                 "Cuenta": banco_c,
                 "Saldo por cubrir al proveedor": f"${total_saldo_pend:,.2f}",
                 "Total a Pagar a Proveedor": f"${total_monto_bruto:,.2f}",
-                "Saldo por cubrir": "-",
+                "Saldo por cubrir": f"${saldo_calc:,.2f}",
                 "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
                 "Retorno por pagar": f"{sem_ret} ${retorno_calc:,.2f}"
             })
