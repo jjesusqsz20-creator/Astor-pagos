@@ -1511,7 +1511,7 @@ if is_editor:
                         resumen_ret_dash = []
                         sum_pago_prov = 0; sum_dif_inside = 0; sum_ret_pagar_bruto = 0
                         
-                        for c in CUENTAS:
+                        for i, c in enumerate(CUENTAS, 1):
                             nombre_c = c.split(" (")[0] if " (" in c else c
                             banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
                             df_c = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
@@ -1520,7 +1520,17 @@ if is_editor:
                             retorno_auto_bruto = total_monto_prov - total_dif_inside
                             sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
                             sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Total a Pagar a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
+                            
+                            resumen_ret_dash.append({
+                                "# de cuenta": i,
+                                "Nombre": nombre_c,
+                                "Cuenta": banco_c,
+                                "Saldo por cubrir al proveedor": f"${total_monto_prov:,.2f}",
+                                "Total a Pagar a Proveedor": f"${total_monto_prov:,.2f}",
+                                "Saldo por cubrir": "-",
+                                "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
+                                "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"
+                            })
                         
                         df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
                         st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
