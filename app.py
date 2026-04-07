@@ -1383,7 +1383,7 @@ if is_editor:
                             c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
                             c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.0f}</b></p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.2f}</b></p>", unsafe_allow_html=True)
                             c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
 
 # 3. RETORNO ENTREGADO
@@ -1489,7 +1489,7 @@ if is_editor or is_factura:
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.0f}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.2f}</p>", unsafe_allow_html=True)
 
 
 
