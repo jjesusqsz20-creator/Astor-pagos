@@ -625,10 +625,27 @@ def obtener_todos_ingresos_periodo():
 def obtener_ingreso_periodo(mes, anio):
     df = obtener_todos_ingresos_periodo()
     if df.empty: return 2200000.0
-    res = df[(df["Mes"] == mes) & (df["Año"].astype(str) == str(anio))]
-    if not res.empty:
-        # Tomamos el último registro guardado para este periodo (el más reciente)
-        return float(res.iloc[-1]["Ingreso"])
+    
+    # Búsqueda Robusta: Normalizamos strings y números para evitar errores de tipo (int vs str vs float)
+    try:
+        # Normalizamos Mes (Trim y Título)
+        temp_df = df.copy()
+        temp_df["Mes_Busqueda"] = temp_df["Mes"].astype(str).str.strip().str.title()
+        mes_target = str(mes).strip().title()
+        
+        # Normalizamos Año (Convertimos a entero para comparación numérica pura)
+        temp_df["Anio_Busqueda"] = pd.to_numeric(temp_df["Año"], errors='coerce').fillna(0).astype(int)
+        anio_target = int(anio)
+        
+        res = temp_df[(temp_df["Mes_Busqueda"] == mes_target) & (temp_df["Anio_Busqueda"] == anio_target)]
+        
+        if not res.empty:
+            # Siempre tomamos el último registro guardado (el más reciente)
+            return float(res.iloc[-1]["Ingreso"])
+    except Exception as e:
+        # Fallback silencioso al valor base si algo falla en la búsqueda
+        pass
+        
     return 2200000.0
 
 def guardar_ingreso_periodo(mes, anio, monto):
