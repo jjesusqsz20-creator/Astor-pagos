@@ -1167,17 +1167,20 @@ if is_editor:
             st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
 
         with col_p1:
-            monto_temp = st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
+            st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
                             step=1000.0, key="ing_input")
-            
-            if st.button("💾 Guardar pronóstico de ingreso", type="primary", use_container_width=True):
-                if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_temp):
-                    st.session_state.ingreso_mensual = monto_temp
-                    st.success(f"✅ Pronóstico guardado y aplicado: ${monto_temp:,.2f}")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("❌ Error al guardar en la base de datos.")
+        
+        # Botón a lo largo (fuera de las columnas)
+        st.write("<br>", unsafe_allow_html=True)
+        if st.button("💾 Guardar pronóstico de ingreso", type="primary", use_container_width=True):
+            monto_final = st.session_state.ing_input
+            if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_final):
+                st.session_state.ingreso_mensual = monto_final
+                st.success(f"✅ Pronóstico guardado y aplicado: ${monto_final:,.2f}")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("❌ Error al guardar en la base de datos.")
     
     st.divider()
 
