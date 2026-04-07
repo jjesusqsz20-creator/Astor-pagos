@@ -1124,7 +1124,7 @@ semaforo_m = "🟢" if adeudo <= 0 else "🔴"
 # Fila 1: 3 cuadros (Solo Administradores)
 if is_editor:
     col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
-    render_metric_card(col_r1_1, "Pago total a proveedor", t_abonado, "#3b82f6") # Azul
+    render_metric_card(col_r1_1, "Total a pagar a proveedor", t_abonado, "#3b82f6") # Azul
     render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
     render_metric_card(col_r1_3, "Diferencia Inside (Comisión)", dif_ret, "#ef4444") # Rojo
 
@@ -1520,7 +1520,7 @@ if is_editor:
                             retorno_auto_bruto = total_monto_prov - total_dif_inside
                             sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
                             sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
+                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Total a Pagar a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
                         
                         df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
                         st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
