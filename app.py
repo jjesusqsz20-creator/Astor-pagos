@@ -718,6 +718,13 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
             if str(row_dict.get("Ticket", "")).strip() in ["", "None", ".","`"]:
                 row_dict["Ticket"] = "---"
 
+            # 6. Capturar columna Estado (si existe en el row o headers)
+            if "Estado" in headers:
+                idx_st = headers.index("Estado")
+                row_dict["Estado"] = r[idx_st] if idx_st < n else "Activo"
+            else:
+                row_dict["Estado"] = "Activo"
+
             all_processed.append(row_dict)
         
         df = pd.DataFrame(all_processed)
@@ -757,6 +764,8 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
                     # Inicializar con 0.0 si es una columna numérica conocida
                     if col in ["Monto Total", "Diferencia", "Retorno a Pagar", "Monto"]:
                         df[col] = 0.0
+                    elif col == "Estado":
+                        df[col] = "Activo"
                     else:
                         df[col] = "---"
             elif col in ["Nombre", "Banco", "Proveedor"]:
@@ -770,7 +779,7 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
 def obtener_datos_retorno():
     """Descarga los datos de retornos desde la hoja 'Retorno'"""
     # Admitir tanto el nombre de la hoja como el estandarizado
-    df = obtener_datos_resiliente(sheet_retorno, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Diferencia", "Retorno a Pagar", "Registrado por", "Ref_Abono"])
+    df = obtener_datos_resiliente(sheet_retorno, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Diferencia", "Retorno a Pagar", "Registrado por", "Ref_Abono", "Estado"])
     
     # Estandarizar nombre de columna a singular para toda la app
     if "Retorno a Pagar" in df.columns:
@@ -801,7 +810,7 @@ def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno
         num_filas = len(df_cache) + 1 # +1 por el encabezado
         nuevo_ticket = 20000 + num_filas
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
-        sheet_retorno.append_row([nuevo_ticket, fecha_actual, nombre, banco, proveedor, monto_total, diferencia, retorno_neto, nombre_usuario, ref_abono])
+        sheet_retorno.append_row([nuevo_ticket, fecha_actual, nombre, banco, proveedor, monto_total, diferencia, retorno_neto, nombre_usuario, ref_abono, "Activo"])
         obtener_datos_retorno.clear()
         return True
     except Exception:
@@ -811,7 +820,7 @@ def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno
 def obtener_datos_retorno_manual():
     """Descarga los datos de retornos manuales desde la hoja 'Retorno_Manual'"""
     # Usar 'Monto Total' para consistencia con el rename_map y otras hojas
-    return obtener_datos_resiliente(sheet_retorno_manual, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Registrado por"])
+    return obtener_datos_resiliente(sheet_retorno_manual, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Registrado por", "Estado"])
 
 def registrar_retorno_manual(monto):
     """Guarda un nuevo registro de retorno manual en Google Sheets con serie 30000"""
@@ -822,7 +831,7 @@ def registrar_retorno_manual(monto):
         nuevo_ticket = 30000 + num_filas
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
         # Usamos nombre_usuario en la columna 'Nombre' para indicar quién registró el retorno (ahora global)
-        sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre_usuario, "---", "---", monto, nombre_usuario])
+        sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre_usuario, "---", "---", monto, nombre_usuario, "Activo"])
         obtener_datos_retorno_manual.clear()
         enviar_notificacion_whatsapp(nuevo_ticket, monto)
         return True
@@ -848,6 +857,63 @@ def actualizar_retorno_manual(ticket_id, monto):
         
         det_ant = " | ".join(cambios_ant); det_new = " | ".join(cambios_new)
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
+
+# --- FUNCIONES DE INACTIVACIÓN (Soft Delete) ---
+
+def inactivar_pago(ticket_id, usuario_nombre):
+    """Marca un abono como Inactivo en Google Sheets y registra en auditoría."""
+    try:
+        data = sheet.get_all_values()
+        headers = [h.strip() for h in data[0]]
+        if "Ticket" not in headers: return False
+        
+        idx_t = headers.index("Ticket")
+        idx_status = headers.index("Estado") if "Estado" in headers else -1
+        
+        if idx_status == -1:
+            sheet.update_cell(1, len(headers) + 1, "Estado")
+            idx_status = len(headers)
+        
+        row_found = -1
+        for i, row in enumerate(data[1:], 2):
+            if str(row[idx_t]) == str(ticket_id):
+                row_found = i; break
+        
+        if row_found == -1: return False
+        sheet.update_cell(row_found, idx_status + 1, "Inactivo")
+        
+        fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Inactivación", "Activo", "Inactivo"])
+        return True
+    except: return False
+
+def inactivar_retorno_manual(ticket_id, usuario_nombre):
+    """Marca un retorno manual como Inactivo en Google Sheets y registra en auditoría."""
+    try:
+        data = sheet_retorno_manual.get_all_values()
+        headers = [h.strip() for h in data[0]]
+        if "Ticket" not in headers: return False
+        
+        idx_t = headers.index("Ticket")
+        idx_status = headers.index("Estado") if "Estado" in headers else -1
+        
+        if idx_status == -1:
+            sheet_retorno_manual.update_cell(1, len(headers) + 1, "Estado")
+            idx_status = len(headers)
+        
+        row_found = -1
+        for i, row in enumerate(data[1:], 2):
+            if str(row[idx_t]) == str(ticket_id):
+                row_found = i; break
+        
+        if row_found == -1: return False
+        sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Inactivo")
+        
+        fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_audit.append_row([fecha_act, usuario_nombre, "---", ticket_id, "Inactivación", "Activo", "Inactivo"])
+        obtener_datos_retorno_manual.clear()
+        return True
+    except: return False
         
         # Mantener Banco y Proveedor como "---" si se edita un registro nuevo, o respetar los antiguos si se edita uno viejo
         nuevo_nombre = orig['Nombre']
@@ -925,7 +991,7 @@ if "ingreso_mensual" not in st.session_state or "proveedores_df" not in st.sessi
 @st.cache_data(ttl=600)  # Mantiene los datos en memoria para cargar la página al instante
 def obtener_datos():
     """Descarga los datos actuales desde Google Sheets"""
-    expected = ["Ticket", "Fecha", "Cuenta", "Proveedor", "Monto Total", "Registrado por"]
+    expected = ["Ticket", "Fecha", "Cuenta", "Proveedor", "Monto Total", "Registrado por", "Estado"]
     df = obtener_datos_resiliente(sheet, expected)
     if "Monto Total" in df.columns:
         df["Monto Total"] = pd.to_numeric(df["Monto Total"], errors='coerce').fillna(0.0)
@@ -946,7 +1012,7 @@ def registrar_pago(cuenta, proveedor, monto):
     nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
     
     # Agregar la nueva fila con el registro del abono y el responsable
-    sheet.append_row([nuevo_ticket, fecha_actual, cuenta, proveedor, monto, nombre_usuario])
+    sheet.append_row([nuevo_ticket, fecha_actual, cuenta, proveedor, monto, nombre_usuario, "Activo"])
     obtener_datos.clear()  # Forzar refresco de datos
     enviar_notificacion_whatsapp(nuevo_ticket, monto)
     return nuevo_ticket
@@ -1345,8 +1411,20 @@ if is_editor:
                 else:
                     for idx, row in df_filtrado.iterrows():
                         t_id = str(row.get('Ticket', '---'))
+                        es_inactivo = row.get('Estado') == 'Inactivo'
+                        
                         # Contenedor con borde para cada ticket
                         with st.container(border=True):
+                            if es_inactivo:
+                                st.markdown("""
+                                    <style>
+                                        div[data-testid="stVerticalBlock"] > div:has(div.stExpander) {
+                                            opacity: 0.6;
+                                            filter: grayscale(100%);
+                                        }
+                                    </style>
+                                """, unsafe_allow_html=True)
+                            
                             c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
                             with c_tk:
                                 with st.popover(f"🎫 {t_id}", use_container_width=True):
@@ -1379,6 +1457,21 @@ if is_editor:
                                         st.info("Sin ediciones previas.")
                                     else:
                                         st.dataframe(df_este_ticket[["Fecha", "Usuario", "Accion", "Dato_Anterior", "Dato_Nuevo"]], use_container_width=True, hide_index=True)
+                                    
+                                    st.divider()
+                                    if not es_inactivo:
+                                        if st.button("🗑️ Inactivar Registro", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
+                                            with st.spinner("Inactivando..."):
+                                                nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
+                                                if inactivar_pago(t_id, nombre_u):
+                                                    st.success("✅ Registro inactivado correctamente.")
+                                                    obtener_datos.clear()
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ Error al inactivar.")
+                                    else:
+                                        st.warning("⚠️ Este registro ya se encuentra INACTIVO.")
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
@@ -1470,7 +1563,13 @@ if is_editor or is_factura:
                 else:
                     for idx, row in df_m_filtrado.iterrows():
                         tm_id = str(row.get('Ticket', '---'))
+                        es_inactivo_m = row.get('Estado') == 'Inactivo'
+                        
                         with st.container(border=True):
+                            if es_inactivo_m:
+                                # Aplicar filtro visual similar
+                                pass 
+                            
                             c_tk, c_f, c_p, c_m = st.columns(CM_PESOS)
                             with c_tk:
                                 with st.popover(f"🎫 {tm_id}", use_container_width=True):
@@ -1486,6 +1585,21 @@ if is_editor or is_factura:
                                                 st.rerun()
                                             else:
                                                 st.error("❌ Error al actualizar.")
+                                    
+                                    st.divider()
+                                    if not es_inactivo_m:
+                                        if st.button("🗑️ Inactivar Retorno", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
+                                            with st.spinner("Inactivando..."):
+                                                nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
+                                                if inactivar_retorno_manual(tm_id, nombre_u):
+                                                    st.success("✅ Retorno inactivado correctamente.")
+                                                    obtener_datos_retorno_manual.clear()
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ Error al inactivar.")
+                                    else:
+                                        st.warning("⚠️ Este retorno ya se encuentra INACTIVO.")
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
@@ -1521,7 +1635,12 @@ if is_editor:
                     st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
                     
                     df_h_ret_dash = obtener_datos_retorno()
+                    if not df_h_ret_dash.empty:
+                        df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Estado"] != "Inactivo"]
+                        
                     df_h_manual_dash = obtener_datos_retorno_manual()
+                    if not df_h_manual_dash.empty:
+                        df_h_manual_dash = df_h_manual_dash[df_h_manual_dash["Estado"] != "Inactivo"]
                     
                     if not df_h_ret_dash.empty:
                         # AUDITORÍA: Ver todos los retornos que tengan impacto en saldos (independiente de la selección actual)
@@ -1533,8 +1652,10 @@ if is_editor:
                     
                     # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
                     df_historial = obtener_datos()
-                    if not df_historial.empty and "Cuenta" in df_historial.columns:
-                        df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+                    if not df_historial.empty:
+                        df_historial = df_historial[df_historial["Estado"] != "Inactivo"]
+                        if "Cuenta" in df_historial.columns:
+                            df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
         except Exception as e:
             st.error(f"Error procesando el tablero: {e}")
     
