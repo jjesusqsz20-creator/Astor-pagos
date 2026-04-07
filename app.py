@@ -925,21 +925,7 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         obtener_datos_retorno_manual.clear()
         return True
     except: return False
-        
-        # Mantener Banco y Proveedor como "---" si se edita un registro nuevo, o respetar los antiguos si se edita uno viejo
-        nuevo_nombre = orig['Nombre']
-        nuevo_banco = orig['Banco']
-        nuevo_prov = orig['Proveedor']
-        
-        sheet_retorno_manual.update(f"C{row_idx}:G{row_idx}", [[nuevo_nombre, nuevo_banco, nuevo_prov, monto, nombre_usuario]])
-        registrar_auditoria("---", ticket_id, "Edición Retorno Manual", det_ant, det_new)
-        enviar_notificacion_whatsapp(ticket_id, monto, accion="edición")
-        
-        obtener_datos_retorno_manual.clear()
-        return True
-    except Exception as e:
-        print(f"Error actualización manual: {e}")
-        return False
+
 
 
 # Inicializar variables de configuración en sesión desde la Base de Datos
