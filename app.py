@@ -1654,6 +1654,7 @@ if is_editor:
 
             # --- LÓGICA DE SINCRONIZACIÓN DINÁMICA ---
             def prov_config_panel():
+                @st.fragment
                 def render_popover_cuentas():
                     with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
                         def sync_all():
@@ -1672,6 +1673,7 @@ if is_editor:
                         
                         st.session_state.cuentas_seleccionadas_final = [c for c in CUENTAS if st.session_state.get(f"p_cta_cb_fin_{c}", False)]
 
+                @st.fragment
                 def render_popover_proveedores():
                     with st.popover("👤 Seleccionar Proveedores", use_container_width=True):
                         # 1. LIMPIEZA Y DEDUPLICACIÓN (v9) - GARANTÍA ZERO ERRORS
