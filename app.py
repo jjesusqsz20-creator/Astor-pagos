@@ -1203,14 +1203,14 @@ semaforo_m = "🟢" if adeudo <= 0 else "🔴"
 # Fila 1: 3 cuadros (Solo Administradores)
 if is_editor:
     col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
-    render_metric_card(col_r1_1, "Total a pagar a proveedor", t_abonado, "#3b82f6") # Azul
+    render_metric_card(col_r1_1, "Total pagado", t_abonado, "#3b82f6") # Azul
     render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
     render_metric_card(col_r1_3, "Diferencia Inside (Comisión)", dif_ret, "#ef4444") # Rojo
 
 # Fila 2: 2 cuadros centrados
 st.write("<br>", unsafe_allow_html=True)
 col_r2_space1, col_r2_1, col_r2_2, col_r2_space2 = st.columns([1, 2, 2, 1])
-render_metric_card(col_r2_1, "Retorno entregado", t_manual, "#10b981") # Verde
+render_metric_card(col_r2_1, "Retorno pagado", t_manual, "#10b981") # Verde
 render_metric_card(col_r2_2, f"{semaforo_m} Diferencia Proveedor", adeudo, color_adeudo) # Dinámico
 st.write("<br>", unsafe_allow_html=True)
 
@@ -1476,23 +1476,23 @@ if is_editor:
                             c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.2f}</b></p>", unsafe_allow_html=True)
                             c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
 
-# 3. RETORNO ENTREGADO
+# 3. RETORNO PAGADO
 
 
 if is_editor or is_factura:
-    # 3. RETORNO ENTREGADO (GLOBAL)
+    # 3. RETORNO PAGADO (GLOBAL)
     with st.container(border=True):
         # Franjita naranja
         st.markdown('<div style="background-color: #f59e0b; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-        st.markdown("<h5 style='margin-top: -0.5rem; color: #364350; font-weight: 800;'>🔄 Retorno entregado</h5>", unsafe_allow_html=True)
-        st.write("<small>Registra el monto total de retorno entregado al proveedor de forma global.</small>", unsafe_allow_html=True)
+        st.markdown("<h5 style='margin-top: -0.5rem; color: #364350; font-weight: 800;'>🔄 Retorno pagado</h5>", unsafe_allow_html=True)
+        st.write("<small>Registra el monto total de retorno pagado al proveedor de forma global.</small>", unsafe_allow_html=True)
         
         st.write("<br>", unsafe_allow_html=True)
         # Solo columna para el monto
         def update_retorno():
             st.session_state.monto_retorno_val = st.session_state.ret_input_monto
             
-        monto_r = st.number_input(f"🔄 Monto del Retorno Entregado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
+        monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
                                   min_value=0.0, step=100.0, 
                                   key="ret_input_monto", on_change=update_retorno)
         
@@ -1516,7 +1516,7 @@ if is_editor or is_factura:
         
         # --- HISTORIAL DE RETORNO (DESPLEGABLE) ---
         st.markdown('<div id="historial-retornos"></div>', unsafe_allow_html=True)
-        with st.expander("🕒 Ver historial de retorno entregado", expanded=False):
+        with st.expander("🕒 Ver historial de retorno pagado", expanded=False):
             df_h_m = obtener_datos_retorno_manual()
             if df_h_m.empty:
                 st.info("Aún no se han registrado retornos manuales.")
@@ -1732,7 +1732,7 @@ if is_editor:
                 "Nombre": nombre_c,
                 "Cuenta": banco_c,
                 "Saldo por cubrir al proveedor": f"${total_budget:,.2f}",
-                "Total a Pagar a Proveedor": f"${total_monto_bruto:,.2f}",
+                "Total pagado": f"${total_monto_bruto:,.2f}",
                 "Saldo por cubrir": f"${saldo_calc:,.2f}",
                 "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
                 "Retorno por pagar": f"{sem_ret} ${retorno_calc:,.2f}"
