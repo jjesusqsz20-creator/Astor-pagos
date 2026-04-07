@@ -615,7 +615,6 @@ def guardar_config_db(df_prov):
     except Exception as e:
         return False
 
-@st.cache_data(ttl=60)
 def obtener_todos_ingresos_periodo():
     try:
         data = sheet_config_ingresos.get_all_records()
@@ -1193,6 +1192,7 @@ if is_editor:
             monto_final = st.session_state.ing_input
             if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_final):
                 st.session_state.ingreso_mensual = monto_final
+                st.session_state.ing_input = monto_final # Sincronización crítica para persistencia visual
                 st.success(f"✅ Pronóstico guardado y aplicado: ${monto_final:,.2f}")
                 time.sleep(1)
                 st.rerun()
