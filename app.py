@@ -857,6 +857,17 @@ def actualizar_retorno_manual(ticket_id, monto):
         
         det_ant = " | ".join(cambios_ant); det_new = " | ".join(cambios_new)
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
+        
+        # Actualizar la fila en Sheets (Columna 6 es Monto Total en Retorno_Manual)
+        sheet_retorno_manual.update_cell(row_idx, 6, monto)
+        
+        # Registrar en Auditoria
+        fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_audit.append_row([fecha_act, nombre_usuario, "---", ticket_id, "Edición Retorno", det_ant, det_new])
+        obtener_datos_retorno_manual.clear()
+        return True
+    except:
+        return False
 
 # --- FUNCIONES DE INACTIVACIÓN (Soft Delete) ---
 
