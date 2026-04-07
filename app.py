@@ -615,6 +615,7 @@ def guardar_config_db(df_prov):
     except Exception as e:
         return False
 
+@st.cache_data(ttl=600)
 def obtener_todos_ingresos_periodo():
     try:
         data = sheet_config_ingresos.get_all_records()
