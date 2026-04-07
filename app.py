@@ -1520,7 +1520,7 @@ if is_editor:
                             retorno_auto_bruto = total_monto_prov - total_dif_inside
                             sum_pago_prov += total_monto_prov; sum_dif_inside += total_dif_inside; sum_ret_pagar_bruto += retorno_auto_bruto
                             sem_ret = "🟢" if retorno_auto_bruto <= 0 else "🔴"
-                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
+                            resumen_ret_dash.append({"Nombre": nombre_c, "Cuenta": banco_c, "Pago Total a Proveedor": f"${total_monto_prov:,.2f}", "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}", "Retorno por pagar": f"{sem_ret} ${retorno_auto_bruto:,.2f}"})
                         
                         df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
                         st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
