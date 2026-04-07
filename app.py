@@ -627,18 +627,14 @@ def obtener_ingreso_periodo(mes, anio):
     if df.empty: return 2200000.0
     res = df[(df["Mes"] == mes) & (df["Año"].astype(str) == str(anio))]
     if not res.empty:
-        return float(res.iloc[0]["Ingreso"])
+        # Tomamos el último registro guardado para este periodo (el más reciente)
+        return float(res.iloc[-1]["Ingreso"])
     return 2200000.0
 
 def guardar_ingreso_periodo(mes, anio, monto):
     try:
-        df = obtener_todos_ingresos_periodo()
-        idx = df[(df["Mes"] == mes) & (df["Año"].astype(str) == str(anio))].index
-        if not idx.empty:
-            row_idx = idx[0] + 2 # +2 por encabezado y 1-based
-            sheet_config_ingresos.update(f"C{row_idx}", [[monto]])
-        else:
-            sheet_config_ingresos.append_row([mes, str(anio), monto])
+        # Guardamos siempre como nueva fila para mantener trazabilidad de cambios
+        sheet_config_ingresos.append_row([mes, str(anio), monto])
         obtener_todos_ingresos_periodo.clear()
         return True
     except: return False
@@ -1045,9 +1041,13 @@ if "sel_mes" not in st.session_state:
 if "sel_anio" not in st.session_state:
     st.session_state.sel_anio = datetime.now().year
 
+# Inicialización de ingreso (independiente del buffer de input)
+if "ingreso_mensual" not in st.session_state:
+    st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+
 # Inicializar los valores de los widgets (usando sus 'key')
 if "ing_input" not in st.session_state:
-    st.session_state.ing_input = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+    st.session_state.ing_input = st.session_state.ingreso_mensual
 
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
@@ -1056,7 +1056,6 @@ if "ret_input_monto" not in st.session_state:
     st.session_state.ret_input_monto = 50000.0
 
 # Sincronización para etiquetas (labels)
-st.session_state.ingreso_mensual = st.session_state.ing_input
 st.session_state.monto_pago_val = st.session_state.pago_input
 st.session_state.monto_retorno_val = st.session_state.ret_input_monto
 
@@ -1155,7 +1154,11 @@ if is_editor:
         col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
         
         def reload_ingreso():
-            st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+            # Al cambiar periodo, recuperamos el último valor guardado
+            valor_guardado = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+            st.session_state.ingreso_mensual = valor_guardado
+            # Sincronizamos el input para que refleje lo guardado al cambiar mes/año
+            st.session_state.ing_input = valor_guardado
 
         with col_p2:
             meses_lista = list(MESES_MAP.values())
@@ -1164,14 +1167,17 @@ if is_editor:
             st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
 
         with col_p1:
-            def update_ingreso_persistente():
-                monto_nuevo = st.session_state.ing_input
-                st.session_state.ingreso_mensual = monto_nuevo
-                guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_nuevo)
+            monto_temp = st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
+                            step=1000.0, key="ing_input")
             
-            st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
-                            step=1000.0, key="ing_input", on_change=update_ingreso_persistente)
-            nuevo_ingreso = st.session_state.ingreso_mensual
+            if st.button("💾 Guardar pronóstico de ingreso", type="primary", use_container_width=True):
+                if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_temp):
+                    st.session_state.ingreso_mensual = monto_temp
+                    st.success(f"✅ Pronóstico guardado y aplicado: ${monto_temp:,.2f}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("❌ Error al guardar en la base de datos.")
     
     st.divider()
 
