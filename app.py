@@ -1131,7 +1131,7 @@ if "ing_input" not in st.session_state:
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
 
-if "ret_input_monto" not in st.session_state:
+if "ret_input_monto" not in st.session_state or st.session_state.ret_input_monto == 0:
     st.session_state.ret_input_monto = 50000.0
 
 # Sincronización para etiquetas (labels)
@@ -1511,6 +1511,7 @@ if is_editor or is_factura:
                 
                 if exito_ret:
                     st.success(f"✅ ¡Retorno global de ${monto_r:,.2f} MXN registrado!")
+                    st.session_state.ret_input_monto = 50000.0
                     st.session_state.monto_retorno_val = 50000.0
                     st.rerun()
         
