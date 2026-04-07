@@ -660,7 +660,6 @@ def guardar_ingreso_periodo(mes, anio, monto):
         st.session_state.error_tecnico = None
         return True
     except Exception as e:
-        st.session_state.error_tecnico = str(e)
         print(f"Error crítico al guardar ingreso: {e}")
         return False
 
@@ -1143,9 +1142,6 @@ if "pago_input" not in st.session_state:
 if "ret_input_monto" not in st.session_state or st.session_state.ret_input_monto == 0:
     st.session_state.ret_input_monto = 50000.0
 
-if "error_tecnico" not in st.session_state:
-    st.session_state.error_tecnico = None
-
 # Sincronización para etiquetas (labels)
 st.session_state.monto_pago_val = st.session_state.pago_input
 st.session_state.monto_retorno_val = st.session_state.ret_input_monto
@@ -1267,14 +1263,11 @@ if is_editor:
             monto_final = st.session_state.ing_input
             if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_final):
                 st.session_state.ingreso_mensual = monto_final
-                st.session_state.ing_input = monto_final # Sincronización crítica para persistencia visual
                 st.success(f"✅ Pronóstico guardado y aplicado: ${monto_final:,.2f}")
                 time.sleep(1)
                 st.rerun()
             else:
                 st.error("❌ Error al guardar en la base de datos.")
-                if st.session_state.error_tecnico:
-                    st.warning(f"🔧 Detalle Técnico: {st.session_state.error_tecnico}")
     
     st.divider()
 
