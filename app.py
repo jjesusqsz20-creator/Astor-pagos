@@ -1126,7 +1126,7 @@ if is_editor:
     col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
     render_metric_card(col_r1_1, "Pago total a proveedor", t_abonado, "#3b82f6") # Azul
     render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
-    render_metric_card(col_r1_3, "Diferencia Inside", dif_ret, "#ef4444") # Rojo
+    render_metric_card(col_r1_3, "Diferencia Inside (Comisión)", dif_ret, "#ef4444") # Rojo
 
 # Fila 2: 2 cuadros centrados
 st.write("<br>", unsafe_allow_html=True)
