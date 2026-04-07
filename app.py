@@ -1717,10 +1717,10 @@ if is_editor:
             
             # Datos de Auditoría (Ingresos brutos y Diferencias)
             df_c_audit = df_h_ret_dash[(df_h_ret_dash["Nombre"] == nombre_c) & (df_h_ret_dash["Banco"] == banco_c)]
+            # Montos de Retorno
             total_monto_bruto = pd.to_numeric(df_c_audit["Monto Total"], errors='coerce').fillna(0).sum()
             total_dif_inside = pd.to_numeric(df_c_audit["Diferencia"], errors='coerce').fillna(0).sum()
             retorno_calc = total_monto_bruto - total_dif_inside
-            sem_ret = "🟢" if retorno_calc <= 0 else "🔴"
             
             # Datos de Saldo (Monto total presupuestado y lo que resta por pagar)
             df_c_res = df_resumen[df_resumen["Clave_Original"] == c]
@@ -1735,7 +1735,7 @@ if is_editor:
                 "Total pagado": f"${total_monto_bruto:,.2f}",
                 "Saldo por cubrir": f"${saldo_calc:,.2f}",
                 "Diferencia Inside (Comisión)": f"${total_dif_inside:,.2f}",
-                "Retorno por pagar": f"{sem_ret} ${retorno_calc:,.2f}"
+                "Retorno por pagar": f"${retorno_calc:,.2f}"
             })
         
         df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
