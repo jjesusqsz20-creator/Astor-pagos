@@ -1327,7 +1327,11 @@ if is_editor:
                 st.session_state["pago_input"] = st.session_state.get("monto_pago_val", 50000.0)
             
             # Usar etiqueta estática para el widget y mostrar el valor dinámico aparte (evita recreación del widget)
-            st.markdown(f"**💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)**")
+            st.markdown(f"""
+                <p style="font-size: 1.08rem !important; font-weight: 800 !important; color: #1E3A8A !important; margin-bottom: 8px; margin-top: 0px;">
+                    💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)
+                </p>
+            """, unsafe_allow_html=True)
             st.number_input("Monto del Pago", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago,
@@ -1528,7 +1532,11 @@ if is_editor or is_factura:
             st.session_state["ret_input_monto"] = st.session_state.get("monto_retorno_val", 50000.0)
             
         # Usar etiqueta estática para el widget y mostrar el valor dinámico aparte
-        st.markdown(f"**🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)**")
+        st.markdown(f"""
+            <p style="font-size: 1.08rem !important; font-weight: 800 !important; color: #1E3A8A !important; margin-bottom: 8px; margin-top: 0px;">
+                🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)
+            </p>
+        """, unsafe_allow_html=True)
         monto_r = st.number_input("Monto del Retorno", 
                                   min_value=0.0, step=100.0, 
                                   key="ret_input_monto", on_change=update_retorno,
