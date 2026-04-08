@@ -448,12 +448,12 @@ def get_db_sheets(_client):
         sheet_audit = spreadsheet.add_worksheet(title="Auditoria", rows="100", cols="7")
         sheet_audit.append_row(["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"])
 
-    # 6. Hoja de Configuración de Ingresos (V2 - Nueva estructura limpia con Fecha)
-    if "Config_Ingresos_V2" in hojas_nombres:
-        sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos_V2")
+    # 7. Hoja de Historial de Tablero de Control
+    if "Tablero_Historial" in hojas_nombres:
+        sheet_historial_tablero = spreadsheet.worksheet("Tablero_Historial")
     else:
-        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos_V2", rows="100", cols="4")
-        sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso", "Fecha_Registro"])
+        sheet_historial_tablero = spreadsheet.add_worksheet(title="Tablero_Historial", rows="100", cols="12")
+        sheet_historial_tablero.append_row(["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagar", "Comision_Inside", "Retorno_Pagado", "Dif_Proveedor", "Tabla_Resumen", "Fecha_Snapshot", "Usuario"])
 
     return {
         "spreadsheet": spreadsheet,
@@ -462,7 +462,8 @@ def get_db_sheets(_client):
         "retorno": sheet_retorno,
         "retorno_manual": sheet_retorno_manual,
         "abonos": sheet_abonos,
-        "audit": sheet_audit
+        "audit": sheet_audit,
+        "historial_tablero": sheet_historial_tablero
     }
 
 try:
@@ -476,6 +477,7 @@ try:
     sheet_retorno_manual = db_sheets["retorno_manual"]
     sheet_audit = db_sheets["audit"]
     sheet = db_sheets["abonos"]
+    sheet_historial_tablero = db_sheets["historial_tablero"]
 except Exception as e:
     st.error("❌ Error de Conexión: No se pudo conectar a Google Sheets.")
     st.error(f"Detalle: {e}")
@@ -591,13 +593,19 @@ if st.session_state.usuario_logueado is None:
                 st.session_state.vista_auth = "login"; st.rerun()
     st.stop()
 
-# --- FUNCIONES DE ACCESO A DATOS ---
-# Quitamos el cache para que los cambios en gestión sean instantáneos y reales tras añadir/borrar
-def obtener_config_db():
+def obtener_historial_tablero():
     try:
-        data = sheet_config.get_all_values()
-        if not data or len(data) <= 1:
-            return None
+        data = sheet_historial_tablero.get_all_records()
+        return pd.DataFrame(data) if data else pd.DataFrame()
+    except: return pd.DataFrame()
+
+def guardar_snapshot_tablero(mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json):
+    fecha_cap = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
+    try:
+        sheet_historial_tablero.append_row([mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json, fecha_cap, usuario])
+        return True
+    except: return False
         return data
     except Exception:
         return None
@@ -1155,13 +1163,27 @@ for c in CUENTAS:
 
 st.title("💸 Inside - Gestión de Rol de Pagos")
 
-# --- DASHBOARD DE TOTALES GLOBALES ---
+# Función para filtrar cualquier DataFrame por Mes y Año (Periodo)
+def filtrar_por_periodo(df, mes_nombre, anio):
+    if df.empty or "Fecha" not in df.columns: return df
+    try:
+        df['Fecha_DT'] = pd.to_datetime(df['Fecha'], errors='coerce')
+        mes_num = [k for k, v in MESES_MAP.items() if v == mes_nombre][0]
+        return df[(df['Fecha_DT'].dt.month == mes_num) & (df['Fecha_DT'].dt.year == anio)].copy()
+    except:
+        return df
+
 if is_editor or is_factura:
-    df_gl_abono = obtener_datos()
+    m_sel = st.session_state.get('sel_mes', MESES_MAP[datetime.now().month])
+    a_sel = st.session_state.get('sel_anio', datetime.now().year)
+    
+    df_gl_abono = filtrar_por_periodo(obtener_datos(), m_sel, a_sel)
+    df_gl_retorno = filtrar_por_periodo(obtener_datos_retorno(), m_sel, a_sel)
+    df_gl_manual = filtrar_por_periodo(obtener_datos_retorno_manual(), m_sel, a_sel)
 else:
     df_gl_abono = pd.DataFrame()
-df_gl_retorno = obtener_datos_retorno()
-df_gl_manual = obtener_datos_retorno_manual()
+    df_gl_retorno = pd.DataFrame()
+    df_gl_manual = pd.DataFrame()
 
 # Función para sumar solo montos que NO parecen tickets (fuera del rango 10,000-21,000)
 def suma_valida(df, col):
@@ -1808,6 +1830,20 @@ if is_editor:
             render_metric_card(col_inf4, f"{semaforo_m_res} Diferencia Proveedor", adeudo, color_adeudo_res)
 
             st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Botón para Guardar Snapshot (Solo Editores)
+            if is_editor:
+                if st.button("💾 Guardar Cierre de Mes en Historial", use_container_width=True):
+                    # Preparar JSON de la tabla resumen
+                    json_tabla = df_ret_final_dash.to_json(orient="records")
+                    if guardar_snapshot_tablero(m_sel, a_sel, st.session_state.get('ingreso_mensual', 0.0), 
+                                                t_abonado, t_ret_auto_bruto, dif_ret, t_manual, adeudo, json_tabla):
+                        st.success(f"✅ ¡Tablero de {m_sel} {a_sel} guardado en el historial!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Error al guardar en la base de datos.")
+
             st.divider()
             
             # --- DESGLOSE INDIVIDUAL POR CUENTA ---
@@ -1847,6 +1883,36 @@ if is_editor:
                             "Saldo pendiente_str": "Saldo pendiente"
                         }, inplace=True)
                         st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
+            
+            # --- HISTORIAL DE TABLERO DE CONTROL (NUEVO) ---
+            st.write("<br>", unsafe_allow_html=True)
+            with st.expander("🕒 Ver Historial de Tablero de Control (Meses Cerrados)", expanded=False):
+                df_hist = obtener_historial_tablero()
+                if df_hist.empty:
+                    st.info("Aún no hay cierres mensuales registrados.")
+                else:
+                    # Ordenar por año y mes (aproximado)
+                    df_hist = df_hist.sort_values(by=["Año", "Mes"], ascending=False)
+                    for _, row in df_hist.iterrows():
+                        m_h = row["Mes"]
+                        a_h = row["Año"]
+                        with st.expander(f"📁 Tablero de {m_h} {a_h} (Cerrado el {row['Fecha_Snapshot']})"):
+                            # Renderizar métricas archivadas
+                            h_col1, h_col2, h_col3 = st.columns(3)
+                            render_metric_card(h_col1, "Total pagado", row["Total_Pagado"], "#3b82f6")
+                            render_metric_card(h_col2, "Retorno por pagar", row["Total_Pagado"] - row["Comision_Inside"] - row["Retorno_Pagado"], "#f59e0b")
+                            
+                            c_adeudo_h = "#10b981" if row["Dif_Proveedor"] <= 0 else "#ef4444"
+                            s_m_h = "🟢" if row["Dif_Proveedor"] <= 0 else "🔴"
+                            render_metric_card(h_col3, f"{s_m_h} Diferencia Proveedor", row["Dif_Proveedor"], c_adeudo_h)
+                            
+                            # Renderizar tabla archivada
+                            try:
+                                tabla_archived = pd.read_json(row["Tabla_Resumen"])
+                                st.markdown("##### Resumen de Cuentas del Período")
+                                st.markdown(generar_tabla_html(tabla_archived, bg_header="#f1f5f9"), unsafe_allow_html=True)
+                            except:
+                                st.warning("No se pudo cargar la tabla de este historial.")
     # 5. GESTIÓN DE PROVEEDORES
     with st.container(border=True):
         # Franjita rosa para gestión
