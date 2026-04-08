@@ -1496,6 +1496,11 @@ if is_editor or is_factura:
         # Solo columna para el monto
         def update_retorno():
             st.session_state.monto_retorno_val = st.session_state.get('ret_input_monto', 50000.0)
+
+        if st.session_state.get("reset_ret_monto", False):
+            if "ret_input_monto" in st.session_state:
+                del st.session_state["ret_input_monto"]
+            st.session_state.reset_ret_monto = False
             
         monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
                                   min_value=0.0, step=100.0, 
@@ -1516,7 +1521,7 @@ if is_editor or is_factura:
                 
                 if exito_ret:
                     st.success(f"✅ ¡Retorno global de ${monto_r:,.2f} MXN registrado!")
-                    st.session_state.ret_input_monto = 50000.0
+                    st.session_state.reset_ret_monto = True
                     st.session_state.monto_retorno_val = 50000.0
                     st.rerun()
         
