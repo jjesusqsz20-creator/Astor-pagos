@@ -1509,7 +1509,7 @@ if is_editor or is_factura:
                 del st.session_state["ret_input_monto"]
             st.session_state.reset_ret_monto = False
             
-        monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
+        monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)", 
                                   min_value=0.0, step=100.0, 
                                   key="ret_input_monto", on_change=update_retorno)
         
