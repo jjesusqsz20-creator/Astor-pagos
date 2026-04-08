@@ -1316,8 +1316,13 @@ if is_editor:
         with c3:
             def update_pago():
                 st.session_state.monto_pago_val = st.session_state.get('pago_input', 50000.0)
+
+            if st.session_state.get("reset_pago_input", False):
+                if "pago_input" in st.session_state:
+                    del st.session_state["pago_input"]
+                st.session_state.reset_pago_input = False
             
-            st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.2f} MXN)", 
+            st.number_input(f"💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago)
             monto_ingresado = st.session_state.monto_pago_val
@@ -1353,6 +1358,8 @@ if is_editor:
                         
                         if exito_guardado:
                             st.success(f"✅ ¡Pago y Retorno de ${monto_ingresado:,.2f} MXN registrados!")
+                            st.session_state.reset_pago_input = True
+                            st.session_state.monto_pago_val = 50000.0
                             st.rerun()
 
         # --- HISTORIAL DE PAGO A PROVEEDOR (DESPLEGABLE) ---
