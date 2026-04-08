@@ -1714,6 +1714,7 @@ if is_editor:
         resumen_ret_dash = []
         total_pagado_general = 0.0
         total_retorno_general = 0.0
+        total_saldo_general = 0.0
         for i, c in enumerate(CUENTAS, 1):
             nombre_c = c.split(" (")[0] if " (" in c else c
             banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
@@ -1734,6 +1735,7 @@ if is_editor:
             total_budget = df_c_res["Pagos a realizar"].sum() if not df_c_res.empty else 0.0
             
             saldo_calc = total_budget - total_monto_bruto
+            total_saldo_general += saldo_calc
             resumen_ret_dash.append({
                 "# de cuenta": i,
                 "Nombre": nombre_c,
@@ -1755,9 +1757,13 @@ if is_editor:
             st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
             
             # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
-            col_inf1, col_inf2, col_inf3, col_inf4 = st.columns([1, 2, 2, 1])
+            col_inf1, col_inf2, col_inf3, col_inf4, col_inf5 = st.columns([1, 2, 2, 2, 1])
             render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
             render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
+            
+            color_dif_res = "#10b981" if total_saldo_general <= 0 else "#ef4444"
+            semaforo_res = "🟢" if total_saldo_general <= 0 else "🔴"
+            render_metric_card(col_inf4, f"{semaforo_res} Diferencia Proveedor", total_saldo_general, color_dif_res)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.divider()
