@@ -1167,8 +1167,7 @@ df_gl_manual = obtener_datos_retorno_manual()
 def suma_valida(df, col):
     if df.empty or col not in df.columns: return 0.0
     vals = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    # Filtro: Ignorar valores que coincidan con la serie de tickets 10000+ o Retornos 20000+
-    return vals[(vals < 9999) | (vals > 41000)].sum()
+    return vals.sum()
 
 t_abonado = suma_valida(df_gl_abono, "Monto Total")
 t_ret_auto_bruto = suma_valida(df_gl_retorno, "Retorno por pagar")
