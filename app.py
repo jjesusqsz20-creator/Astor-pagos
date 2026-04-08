@@ -818,10 +818,10 @@ def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno
     """Guarda un nuevo registro de retorno en Google Sheets con 10 columnas"""
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        # Calcular Ticket (Serie 20000) de forma eficiente usando el cache
+        # Calcular Ticket (Serie 30000) de forma eficiente usando el cache
         df_cache = obtener_datos_retorno()
         num_filas = len(df_cache) + 1 # +1 por el encabezado
-        nuevo_ticket = 20000 + num_filas
+        nuevo_ticket = 30000 + num_filas
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
         sheet_retorno.append_row([nuevo_ticket, fecha_actual, nombre, banco, proveedor, monto_total, diferencia, retorno_neto, nombre_usuario, ref_abono, "Activo"])
         obtener_datos_retorno.clear()
@@ -836,12 +836,12 @@ def obtener_datos_retorno_manual():
     return obtener_datos_resiliente(sheet_retorno_manual, ["Ticket", "Fecha", "Nombre", "Banco", "Proveedor", "Monto Total", "Registrado por", "Estado"])
 
 def registrar_retorno_manual(monto):
-    """Guarda un nuevo registro de retorno manual en Google Sheets con serie 30000"""
+    """Guarda un nuevo registro de retorno manual en Google Sheets con serie 20000"""
     fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         df_cache = obtener_datos_retorno_manual()
         num_filas = len(df_cache) + 1
-        nuevo_ticket = 30000 + num_filas
+        nuevo_ticket = 20000 + num_filas
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
         # Usamos nombre_usuario en la columna 'Nombre' para indicar quién registró el retorno (ahora global)
         sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre_usuario, "---", "---", monto, nombre_usuario, "Activo"])
