@@ -1145,6 +1145,14 @@ if "ret_input_monto" not in st.session_state:
 if "monto_retorno_val" not in st.session_state:
     st.session_state.monto_retorno_val = 50000.0
 
+# Inicialización de la selección de cuentas (Gestión de Proveedores)
+if "master_ctas" not in st.session_state:
+    st.session_state["master_ctas"] = False
+for c in CUENTAS:
+    key_cta = f"p_cta_cb_fin_{c}"
+    if key_cta not in st.session_state:
+        st.session_state[key_cta] = False
+
 st.title("💸 Inside - Gestión de Rol de Pagos")
 
 # --- DASHBOARD DE TOTALES GLOBALES ---
@@ -1844,13 +1852,13 @@ if is_editor:
                 def render_popover_cuentas():
                     with st.popover("📂 Seleccionar Cuentas", use_container_width=True):
                         def sync_all():
-                            val = st.session_state.master_ctas
+                            val = st.session_state.get("master_ctas", False)
                             for c in CUENTAS:
                                 st.session_state[f"p_cta_cb_fin_{c}"] = val
                         
                         def sync_ind():
                             all_sel = all(st.session_state.get(f"p_cta_cb_fin_{c}", False) for c in CUENTAS)
-                            st.session_state.master_ctas = all_sel
+                            st.session_state["master_ctas"] = all_sel
 
                         st.markdown("**Cuentas a configurar**")
                         st.checkbox("📍 Seleccionar todas", key="master_ctas", on_change=sync_all)
