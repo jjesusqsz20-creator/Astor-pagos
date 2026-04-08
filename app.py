@@ -448,11 +448,11 @@ def get_db_sheets(_client):
         sheet_audit = spreadsheet.add_worksheet(title="Auditoria", rows="100", cols="7")
         sheet_audit.append_row(["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"])
 
-    # 6. Hoja de Configuración de Ingresos
-    if "Config_Ingresos" in hojas_nombres:
-        sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos")
+    # 6. Hoja de Configuración de Ingresos (V2 - Nueva estructura limpia)
+    if "Config_Ingresos_V2" in hojas_nombres:
+        sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos_V2")
     else:
-        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos", rows="100", cols="3")
+        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos_V2", rows="100", cols="3")
         sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso"])
 
     return {
@@ -618,47 +618,54 @@ def guardar_config_db(df_prov):
 @st.cache_data(ttl=600)
 def obtener_todos_ingresos_periodo():
     try:
-        data = sheet_config_ingresos.get_all_records()
-        return pd.DataFrame(data)
+        # Leer como valores crudos para evitar errores de encabezados con caracteres especiales
+        data = sheet_config_ingresos.get_all_values()
+        if not data or len(data) < 2:
+            return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
+        
+        # El primer renglón son encabezados, el resto datos
+        headers = data[0]
+        rows = data[1:]
+        return pd.DataFrame(rows, columns=headers)
     except: return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
 
 def obtener_ingreso_periodo(mes, anio):
     # Forzar limpieza de cache para asegurar datos frescos
     obtener_todos_ingresos_periodo.clear()
     df = obtener_todos_ingresos_periodo()
-    if df.empty: return 2200000.0
+    if df.empty: return 0.0 # Ya no usamos 2.2M como fallback, devolvemos 0 si no hay dato
     
     try:
-        # Normalización agresiva del DataFrame
+        # Normalización agresiva del DataFrame de solo texto
         temp_df = df.copy()
         
-        # Identificar columnas por posición o similitud para evitar problemas con la 'ñ'
-        # Col 0: Mes, Col 1: Año, Col 2: Ingreso
+        # Identificar columnas por posición física real (0, 1, 2)
+        # Esto es lo más robusto: no importa qué digan los títulos
         cols_actuales = temp_df.columns.tolist()
-        col_mes = cols_actuales[0] if len(cols_actuales) > 0 else "Mes"
-        col_anio = cols_actuales[1] if len(cols_actuales) > 1 else "Año"
-        col_ing = cols_actuales[2] if len(cols_actuales) > 2 else "Ingreso"
+        col_idx_mes = 0
+        col_idx_anio = 1
+        col_idx_ing = 2
 
-        # Búsqueda normalizada
-        temp_df["Mes_Norm"] = temp_df[col_mes].astype(str).str.strip().str.upper()
+        # Búsqueda normalizada sobre la matriz de texto
+        temp_df["Mes_Norm"] = temp_df.iloc[:, col_idx_mes].astype(str).str.strip().str.upper()
         mes_target = str(mes).strip().upper()
         
-        temp_df["Anio_Norm"] = pd.to_numeric(temp_df[col_anio], errors='coerce').fillna(0).astype(int)
+        temp_df["Anio_Norm"] = pd.to_numeric(temp_df.iloc[:, col_idx_anio], errors='coerce').fillna(0).astype(int)
         anio_target = int(anio)
         
         # Filtrar coincidencias
         res = temp_df[(temp_df["Mes_Norm"] == mes_target) & (temp_df["Anio_Norm"] == anio_target)]
         
         if not res.empty:
-            # Tomamos el último valor numérico válido
-            ultimo_val = res.iloc[-1][col_ing]
-            # Limpieza de signos de pesos o comas si llegaran a existir en esa celda
-            s_val = str(ultimo_val).replace("$","").replace(",","").strip()
+            # Tomamos el último valor de la columna 2 (Ingreso)
+            ultimo_val = res.iloc[-1].iloc[col_idx_ing]
+            # Limpieza exhaustiva de basura en el número
+            s_val = str(ultimo_val).replace("$","").replace(",","").replace(" ","").strip()
             return float(s_val)
     except Exception as e:
-        print(f"Error en búsqueda robusta de ingreso: {e}")
+        print(f"Error en búsqueda definitiva de ingreso: {e}")
         
-    return 2200000.0
+    return 0.0
 
 def guardar_ingreso_periodo(mes, anio, monto):
     try:
@@ -1126,6 +1133,10 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 
 if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
     st.cache_data.clear()
+    # Borrar variables de sesión para forzar re-lectura total
+    for key in ["ingreso_mensual", "ing_input", "pago_input", "ret_input_monto"]:
+        if key in st.session_state:
+            del st.session_state[key]
     st.rerun()
 
 
@@ -1143,9 +1154,7 @@ if "sel_anio" not in st.session_state:
 # Inicialización de ingreso (independiente del buffer de input)
 if "ingreso_mensual" not in st.session_state:
     st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
-
-# Inicializar los valores de los widgets (usando sus 'key')
-if "ing_input" not in st.session_state:
+    # Sincronizar el input inmediatamente al cargar por primera vez o refrescar
     st.session_state.ing_input = st.session_state.ingreso_mensual
 
 if "pago_input" not in st.session_state:
