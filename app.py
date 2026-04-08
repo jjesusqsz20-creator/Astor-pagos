@@ -1125,25 +1125,16 @@ if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
             del st.session_state[key]
     st.rerun()
 
-# --- DIAGNOSTICO TEMPORAL (Solo para esta corrección) ---
-with st.sidebar.expander("🛠️ Debug de Datos (V2)", expanded=False):
-    df_debug = obtener_todos_ingresos_periodo()
-    st.dataframe(df_debug, use_container_width=True)
+# --- INTERFAZ GRAFICA (UI) ---
 
 
 
 
 
-# --- INICIALIZACIÓN DE ESTADOS ---
-if "sel_mes" not in st.session_state:
-    st.session_state.sel_mes = MESES_MAP[datetime.now().month]
-if "sel_anio" not in st.session_state:
-    st.session_state.sel_anio = datetime.now().year
-
-if "ingreso_mensual" not in st.session_state:
+if "ing_input" not in st.session_state:
     val_db = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
     st.session_state.ingreso_mensual = val_db
-    st.session_state.ing_input = val_db # Forzamos sincronía inicial limpia
+    st.session_state.ing_input = val_db
 
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
