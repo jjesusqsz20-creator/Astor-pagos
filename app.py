@@ -1758,45 +1758,47 @@ if is_editor:
             col_inf1, col_inf2, col_inf3, col_inf4 = st.columns([1, 2, 2, 1])
             render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
             render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.divider()
+            
+            # --- DESGLOSE INDIVIDUAL POR CUENTA ---
+            for c in CUENTAS:
+                df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
+                
+                # CONSISTENCIA: Si la cuenta está vacía, calculamos el ingreso base y los demás a 0
+                ingreso = st.session_state.ingreso_mensual / 5.0
+                total_pago = df_cuenta["Pagos a realizar"].sum() if not df_cuenta.empty else 0.0
+                total_abono = df_cuenta["Pagado a proveedores"].sum() if not df_cuenta.empty else 0.0
+                total_saldo = df_cuenta["Saldo pendiente"].sum() if not df_cuenta.empty else 0.0
+                
+                bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
+                logo_banco = "👤" 
+                
+                def pad_mono(text, length):
+                    return str(text).ljust(length)
         
-        st.divider()
-    
-        for c in CUENTAS:
-            df_cuenta = df_resumen[df_resumen["Clave_Original"] == c].copy()
-            
-            # CONSISTENCIA: Si la cuenta está vacía, calculamos el ingreso base y los demás a 0
-            ingreso = st.session_state.ingreso_mensual / 5.0
-            total_pago = df_cuenta["Pagos a realizar"].sum() if not df_cuenta.empty else 0.0
-            total_abono = df_cuenta["Pagado a proveedores"].sum() if not df_cuenta.empty else 0.0
-            total_saldo = df_cuenta["Saldo pendiente"].sum() if not df_cuenta.empty else 0.0
-            
-            bg_color = 'rgba(100, 149, 237, 0.15)' if "BBVA" in c else ('rgba(255, 105, 97, 0.15)' if "Santander" in c else ('rgba(173, 216, 230, 0.15)' if "Banamex" in c else 'rgba(240, 240, 240, 0.1)'))
-            logo_banco = "👤" 
-            
-            def pad_mono(text, length):
-                return str(text).ljust(length)
-    
-            nombre_raw = f"{logo_banco} {c}"
-            nombre_col = pad_mono(nombre_raw, 48) 
-            m_ing = f"Ing:${ingreso:,.0f}"
-            m_pag = f"PAGO:${total_abono:,.0f}"
-            
-            m_sal_icon = '🟢' if total_saldo <= 0 else ('🟡' if total_abono > 0 else '🔴')
-            m_sal = f"Sal:{m_sal_icon}${total_saldo:,.0f}"
-            
-            titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
-            
-            with st.expander(titulo_expander, expanded=False):
-                if df_cuenta.empty:
-                    st.info("💡 No hay proveedores asignados a esta cuenta aún.")
-                else:
-                    df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
-                    df_disp.rename(columns={
-                        "Pagos a realizar_str": "Pago a Realizar", 
-                        "Pagado a proveedores_str": "Pagado a proveedores", 
-                        "Saldo pendiente_str": "Saldo pendiente"
-                    }, inplace=True)
-                    st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
+                nombre_raw = f"{logo_banco} {c}"
+                nombre_col = pad_mono(nombre_raw, 48) 
+                m_ing = f"Ing:${ingreso:,.0f}"
+                m_pag = f"PAGO:${total_abono:,.0f}"
+                
+                m_sal_icon = '🟢' if total_saldo <= 0 else ('🟡' if total_abono > 0 else '🔴')
+                m_sal = f"Sal:{m_sal_icon}${total_saldo:,.0f}"
+                
+                titulo_expander = f"{nombre_col} | {m_ing} | {m_pag} | {m_sal}"
+                
+                with st.expander(titulo_expander, expanded=False):
+                    if df_cuenta.empty:
+                        st.info("💡 No hay proveedores asignados a esta cuenta aún.")
+                    else:
+                        df_disp = df_cuenta[["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]].copy()
+                        df_disp.rename(columns={
+                            "Pagos a realizar_str": "Pago a Realizar", 
+                            "Pagado a proveedores_str": "Pagado a proveedores", 
+                            "Saldo pendiente_str": "Saldo pendiente"
+                        }, inplace=True)
+                        st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
     # 5. GESTIÓN DE PROVEEDORES
     with st.container(border=True):
         # Franjita rosa para gestión
