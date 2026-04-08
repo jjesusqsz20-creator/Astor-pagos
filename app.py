@@ -1326,9 +1326,12 @@ if is_editor:
             if "pago_input" not in st.session_state:
                 st.session_state["pago_input"] = st.session_state.get("monto_pago_val", 50000.0)
             
-            st.number_input(f"💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)", 
+            # Usar etiqueta estática para el widget y mostrar el valor dinámico aparte (evita recreación del widget)
+            st.markdown(f"**💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)**")
+            st.number_input("Monto del Pago", 
                             min_value=0.01, step=100.0, 
-                            key="pago_input", on_change=update_pago)
+                            key="pago_input", on_change=update_pago,
+                            label_visibility="collapsed")
             monto_ingresado = st.session_state.monto_pago_val
         
         st.write("<br>", unsafe_allow_html=True)
@@ -1524,9 +1527,12 @@ if is_editor or is_factura:
         if "ret_input_monto" not in st.session_state:
             st.session_state["ret_input_monto"] = st.session_state.get("monto_retorno_val", 50000.0)
             
-        monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)", 
+        # Usar etiqueta estática para el widget y mostrar el valor dinámico aparte
+        st.markdown(f"**🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)**")
+        monto_r = st.number_input("Monto del Retorno", 
                                   min_value=0.0, step=100.0, 
-                                  key="ret_input_monto", on_change=update_retorno)
+                                  key="ret_input_monto", on_change=update_retorno,
+                                  label_visibility="collapsed")
         
         st.write("<br>", unsafe_allow_html=True)
         if st.button("Guardar Registro de Retorno", type="primary", use_container_width=True, key="ret_btn_manual"):
