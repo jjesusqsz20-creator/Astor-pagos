@@ -623,28 +623,40 @@ def obtener_todos_ingresos_periodo():
     except: return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
 
 def obtener_ingreso_periodo(mes, anio):
+    # Forzar limpieza de cache para asegurar datos frescos
+    obtener_todos_ingresos_periodo.clear()
     df = obtener_todos_ingresos_periodo()
     if df.empty: return 2200000.0
     
-    # Búsqueda Robusta: Normalizamos strings y números para evitar errores de tipo (int vs str vs float)
     try:
-        # Normalizamos Mes (Trim y Título)
+        # Normalización agresiva del DataFrame
         temp_df = df.copy()
-        temp_df["Mes_Busqueda"] = temp_df["Mes"].astype(str).str.strip().str.title()
-        mes_target = str(mes).strip().title()
         
-        # Normalizamos Año (Convertimos a entero para comparación numérica pura)
-        temp_df["Anio_Busqueda"] = pd.to_numeric(temp_df["Año"], errors='coerce').fillna(0).astype(int)
+        # Identificar columnas por posición o similitud para evitar problemas con la 'ñ'
+        # Col 0: Mes, Col 1: Año, Col 2: Ingreso
+        cols_actuales = temp_df.columns.tolist()
+        col_mes = cols_actuales[0] if len(cols_actuales) > 0 else "Mes"
+        col_anio = cols_actuales[1] if len(cols_actuales) > 1 else "Año"
+        col_ing = cols_actuales[2] if len(cols_actuales) > 2 else "Ingreso"
+
+        # Búsqueda normalizada
+        temp_df["Mes_Norm"] = temp_df[col_mes].astype(str).str.strip().str.upper()
+        mes_target = str(mes).strip().upper()
+        
+        temp_df["Anio_Norm"] = pd.to_numeric(temp_df[col_anio], errors='coerce').fillna(0).astype(int)
         anio_target = int(anio)
         
-        res = temp_df[(temp_df["Mes_Busqueda"] == mes_target) & (temp_df["Anio_Busqueda"] == anio_target)]
+        # Filtrar coincidencias
+        res = temp_df[(temp_df["Mes_Norm"] == mes_target) & (temp_df["Anio_Norm"] == anio_target)]
         
         if not res.empty:
-            # Siempre tomamos el último registro guardado (el más reciente)
-            return float(res.iloc[-1]["Ingreso"])
+            # Tomamos el último valor numérico válido
+            ultimo_val = res.iloc[-1][col_ing]
+            # Limpieza de signos de pesos o comas si llegaran a existir en esa celda
+            s_val = str(ultimo_val).replace("$","").replace(",","").strip()
+            return float(s_val)
     except Exception as e:
-        # Fallback silencioso al valor base si algo falla en la búsqueda
-        pass
+        print(f"Error en búsqueda robusta de ingreso: {e}")
         
     return 2200000.0
 
