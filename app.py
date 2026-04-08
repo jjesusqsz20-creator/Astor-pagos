@@ -606,6 +606,12 @@ def guardar_snapshot_tablero(mes, anio, ingreso, pagado, retorno, comision, ret_
         sheet_historial_tablero.append_row([mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json, fecha_cap, usuario])
         return True
     except: return False
+
+def obtener_config_db():
+    try:
+        data = sheet_config.get_all_values()
+        if not data or len(data) <= 1:
+            return None
         return data
     except Exception:
         return None
