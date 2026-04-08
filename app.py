@@ -1206,7 +1206,7 @@ semaforo_m = "🟢" if adeudo <= 0 else "🔴"
 if is_editor:
     col_r1_1, col_r1_2, col_r1_3 = st.columns(3)
     render_metric_card(col_r1_1, "Total pagado", t_abonado, "#3b82f6") # Azul
-    render_metric_card(col_r1_2, "Retorno por pagar", t_ret_neto, "#f59e0b") # Naranja
+    render_metric_card(col_r1_2, "Retorno por pagar", max(0, t_ret_neto), "#f59e0b") # Naranja
     render_metric_card(col_r1_3, "Diferencia Inside (Comisión)", dif_ret, "#ef4444") # Rojo
 
 # Fila 2: 2 cuadros centrados
@@ -1764,7 +1764,7 @@ if is_editor:
             # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
             col_inf1, col_inf2, col_inf3, col_inf4, col_inf5 = st.columns([1, 2, 2, 2, 1])
             render_metric_card(col_inf2, "Total pagado", t_abonado, "#3b82f6")
-            render_metric_card(col_inf3, "Retorno por pagar", t_ret_neto, "#f59e0b")
+            render_metric_card(col_inf3, "Retorno por pagar", max(0, t_ret_neto), "#f59e0b")
             
             # Usar la misma lógica de color y semáforo que arriba para Diferencia Proveedor
             color_adeudo_res = "#10b981" if adeudo <= 0 else "#ef4444"
