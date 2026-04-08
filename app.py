@@ -1717,6 +1717,8 @@ if is_editor:
         
         # --- TABLA DE RESUMEN SINCRONIZADA ---
         resumen_ret_dash = []
+        total_pagado_general = 0.0
+        total_retorno_general = 0.0
         for i, c in enumerate(CUENTAS, 1):
             nombre_c = c.split(" (")[0] if " (" in c else c
             banco_c = c.split(" (")[1].replace(")", "") if " (" in c else ""
@@ -1728,6 +1730,10 @@ if is_editor:
             total_dif_inside = pd.to_numeric(df_c_audit["Diferencia"], errors='coerce').fillna(0).sum()
             retorno_calc = total_monto_bruto - total_dif_inside
             
+            # Acumular totales para los cuadros de abajo
+            total_pagado_general += total_monto_bruto
+            total_retorno_general += retorno_calc
+
             # Datos de Saldo (Monto total presupuestado y lo que resta por pagar)
             df_c_res = df_resumen[df_resumen["Clave_Original"] == c]
             total_budget = df_c_res["Pagos a realizar"].sum() if not df_c_res.empty else 0.0
@@ -1747,6 +1753,12 @@ if is_editor:
         df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
         st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
         st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+        
+        # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
+        col_inf1, col_inf2, col_inf3, col_inf4 = st.columns([1, 2, 2, 1])
+        render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
+        render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
+        
         st.divider()
     
         for c in CUENTAS:
