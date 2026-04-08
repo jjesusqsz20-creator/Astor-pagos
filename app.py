@@ -448,6 +448,13 @@ def get_db_sheets(_client):
         sheet_audit = spreadsheet.add_worksheet(title="Auditoria", rows="100", cols="7")
         sheet_audit.append_row(["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"])
 
+    # 6. Hoja de Configuración de Ingresos (V2 - Nueva estructura limpia con Fecha)
+    if "Config_Ingresos_V2" in hojas_nombres:
+        sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos_V2")
+    else:
+        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos_V2", rows="100", cols="4")
+        sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso", "Fecha_Registro"])
+
     # 7. Hoja de Historial de Tablero de Control
     if "Tablero_Historial" in hojas_nombres:
         sheet_historial_tablero = spreadsheet.worksheet("Tablero_Historial")
