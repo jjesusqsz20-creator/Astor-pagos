@@ -1750,14 +1750,18 @@ if is_editor:
                 "Retorno por pagar": f"${retorno_calc:,.2f}"
             })
         
-        df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
-        st.markdown("##### 🔄 Resumen de Retornos por Cuenta")
-        st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
-        
-        # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
-        col_inf1, col_inf2, col_inf3, col_inf4 = st.columns([1, 2, 2, 1])
-        render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
-        render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
+        # --- TABLA DE RESUMEN SINCRONIZADA ---
+        with st.container(border=True):
+            st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
+            st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>🔄 Resumen de Retornos por Cuenta</h4>", unsafe_allow_html=True)
+            
+            df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
+            st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
+            
+            # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
+            col_inf1, col_inf2, col_inf3, col_inf4 = st.columns([1, 2, 2, 1])
+            render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
+            render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
         
         st.divider()
     
