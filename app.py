@@ -448,12 +448,12 @@ def get_db_sheets(_client):
         sheet_audit = spreadsheet.add_worksheet(title="Auditoria", rows="100", cols="7")
         sheet_audit.append_row(["Fecha", "Usuario", "Ticket_Abono", "Ticket_Retorno", "Accion", "Dato_Anterior", "Dato_Nuevo"])
 
-    # 6. Hoja de Configuración de Ingresos (V2 - Nueva estructura limpia)
+    # 6. Hoja de Configuración de Ingresos (V2 - Nueva estructura limpia con Fecha)
     if "Config_Ingresos_V2" in hojas_nombres:
         sheet_config_ingresos = spreadsheet.worksheet("Config_Ingresos_V2")
     else:
-        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos_V2", rows="100", cols="3")
-        sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso"])
+        sheet_config_ingresos = spreadsheet.add_worksheet(title="Config_Ingresos_V2", rows="100", cols="4")
+        sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso", "Fecha_Registro"])
 
     return {
         "spreadsheet": spreadsheet,
@@ -621,7 +621,7 @@ def obtener_todos_ingresos_periodo():
         # Leer como valores crudos para evitar errores de encabezados con caracteres especiales
         data = sheet_config_ingresos.get_all_values()
         if not data or len(data) < 2:
-            return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
+            return pd.DataFrame(columns=["Mes", "Año", "Ingreso", "Fecha_Registro"])
         
         # El primer renglón son encabezados, el resto datos
         headers = data[0]
@@ -657,6 +657,14 @@ def obtener_ingreso_periodo(mes, anio):
         res = temp_df[(temp_df["Mes_Norm"] == mes_target) & (temp_df["Anio_Norm"] == anio_target)]
         
         if not res.empty:
+            # Si hay columna de Fecha_Registro (col 3), ordenar por ella para tomar lo ÚLTIMO real
+            if res.shape[1] >= 4:
+                # Intentamos ordenar por la columna de fecha
+                try:
+                    res["Fecha_Dt"] = pd.to_datetime(res.iloc[:, 3], errors='coerce')
+                    res = res.sort_values(by="Fecha_Dt", ascending=True)
+                except: pass
+
             # Tomamos el último valor de la columna 2 (Ingreso)
             ultimo_val = res.iloc[-1].iloc[col_idx_ing]
             # Limpieza exhaustiva de basura en el número
@@ -674,7 +682,8 @@ def guardar_ingreso_periodo(mes, anio, monto):
             db = get_db_sheets(client)
             globals()['sheet_config_ingresos'] = db["config_ingresos"]
             
-        sheet_config_ingresos.append_row([str(mes), str(anio), float(monto)])
+        fecha_registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_config_ingresos.append_row([str(mes), str(anio), float(monto), fecha_registro])
         obtener_todos_ingresos_periodo.clear()
         st.session_state.error_tecnico = None
         return True
@@ -958,7 +967,7 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
 # Inicializar variables de configuración en sesión desde la Base de Datos
 if "ingreso_mensual" not in st.session_state or "proveedores_df" not in st.session_state:
     config_data = obtener_config_db()
-    ingreso_val = 2200000.0
+    ingreso_val = 0.0 # Eliminamos los 2.2M definitivamente
     prov_list = []
     
     if config_data:
@@ -1159,9 +1168,13 @@ if "ingreso_mensual" not in st.session_state:
 
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
+if "monto_pago_val" not in st.session_state:
+    st.session_state.monto_pago_val = 50000.0
 
 if "ret_input_monto" not in st.session_state or st.session_state.ret_input_monto == 0:
     st.session_state.ret_input_monto = 50000.0
+if "monto_retorno_val" not in st.session_state:
+    st.session_state.monto_retorno_val = 50000.0
 
 # Sincronización para etiquetas (labels)
 st.session_state.monto_pago_val = st.session_state.pago_input
@@ -1275,7 +1288,9 @@ if is_editor:
             st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
 
         with col_p1:
-            st.number_input(f"💸 Ingreso Mensual (${st.session_state.ingreso_mensual:,.2f} MXN)", 
+            # Usamos el valor actual del input para el paréntesis
+            monto_actual = st.session_state.get('ing_input', 0.0)
+            st.number_input(f"💸 Ingreso Mensual (${monto_actual:,.2f} MXN)", 
                             step=1000.0, key="ing_input")
         
         # Botón a lo largo (fuera de las columnas)
@@ -1331,7 +1346,7 @@ if is_editor:
 
         with c3:
             def update_pago():
-                st.session_state.monto_pago_val = st.session_state.pago_input
+                st.session_state.monto_pago_val = st.session_state.get('pago_input', 50000.0)
             
             st.number_input(f"💰 Monto Pago (${st.session_state.monto_pago_val:,.2f} MXN)", 
                             min_value=0.01, step=100.0, 
@@ -1518,7 +1533,7 @@ if is_editor or is_factura:
         st.write("<br>", unsafe_allow_html=True)
         # Solo columna para el monto
         def update_retorno():
-            st.session_state.monto_retorno_val = st.session_state.ret_input_monto
+            st.session_state.monto_retorno_val = st.session_state.get('ret_input_monto', 50000.0)
             
         monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.ret_input_monto:,.2f} MXN)", 
                                   min_value=0.0, step=100.0, 
