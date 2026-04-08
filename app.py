@@ -1143,9 +1143,7 @@ if "sel_anio" not in st.session_state:
 if "ingreso_mensual" not in st.session_state:
     val_db = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
     st.session_state.ingreso_mensual = val_db
-    # Solo inicializamos el input si no existe ya
-    if "ing_input" not in st.session_state:
-        st.session_state.ing_input = val_db
+    st.session_state.ing_input = val_db # Forzamos sincronía inicial limpia
 
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
@@ -1269,10 +1267,10 @@ if is_editor:
         if st.button("💾 Guardar pronóstico de ingreso", type="primary", use_container_width=True):
             monto_final = st.session_state.ing_input
             if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_final):
-                st.session_state.ingreso_mensual = monto_final
-                # Sincronizamos el input manualmente antes del rerun para que no se borre
-                st.session_state.ing_input = monto_final
-                st.success(f"✅ Pronóstico guardado y aplicado: ${monto_final:,.2f}")
+                # En lugar de forzar el valor, borramos la memoria para que el bloque de arriba lo cargue fresco
+                if "ingreso_mensual" in st.session_state: del st.session_state.ingreso_mensual
+                if "ing_input" in st.session_state: del st.session_state.ing_input
+                st.success(f"✅ ¡Pronóstico de ${monto_final:,.2f} guardado con éxito!")
                 time.sleep(1)
                 st.rerun()
             else:
