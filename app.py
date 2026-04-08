@@ -459,8 +459,8 @@ def get_db_sheets(_client):
     if "Tablero_Historial" in hojas_nombres:
         sheet_historial_tablero = spreadsheet.worksheet("Tablero_Historial")
     else:
-        sheet_historial_tablero = spreadsheet.add_worksheet(title="Tablero_Historial", rows="100", cols="12")
-        sheet_historial_tablero.append_row(["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagar", "Comision_Inside", "Retorno_Pagado", "Dif_Proveedor", "Tabla_Resumen", "Fecha_Snapshot", "Usuario"])
+        sheet_historial_tablero = spreadsheet.add_worksheet(title="Tablero_Historial", rows="100", cols="13")
+        sheet_historial_tablero.append_row(["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagar", "Comision_Inside", "Retorno_Pagado", "Dif_Proveedor", "Tabla_Resumen", "Tabla_Detalle", "Fecha_Snapshot", "Usuario"])
 
     return {
         "spreadsheet": spreadsheet,
@@ -606,11 +606,11 @@ def obtener_historial_tablero():
         return pd.DataFrame(data) if data else pd.DataFrame()
     except: return pd.DataFrame()
 
-def guardar_snapshot_tablero(mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json):
+def guardar_snapshot_tablero(mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json, detalle_json):
     fecha_cap = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
     try:
-        sheet_historial_tablero.append_row([mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json, fecha_cap, usuario])
+        sheet_historial_tablero.append_row([mes, anio, ingreso, pagado, retorno, comision, ret_manual, dif_prov, tabla_json, detalle_json, fecha_cap, usuario])
         return True
     except: return False
 
@@ -1847,11 +1847,12 @@ if is_editor:
             # Botón para Guardar Snapshot (Solo Editores)
             if is_editor:
                 if st.button("💾 Guardar Cierre de Mes en Historial", use_container_width=True):
-                    # Preparar JSON de la tabla resumen
-                    json_tabla = df_ret_final_dash.to_json(orient="records")
+                    # Preparar JSON de la tabla resumen y la detallada
+                    json_resumen = df_ret_final_dash.to_json(orient="records")
+                    json_detalle = df_resumen.to_json(orient="records")
                     if guardar_snapshot_tablero(m_sel, a_sel, st.session_state.get('ingreso_mensual', 0.0), 
-                                                t_abonado, t_ret_auto_bruto, dif_ret, t_manual, adeudo, json_tabla):
-                        st.success(f"✅ ¡Tablero de {m_sel} {a_sel} guardado en el historial!")
+                                                t_abonado, t_ret_auto_bruto, dif_ret, t_manual, adeudo, json_resumen, json_detalle):
+                        st.success(f"✅ ¡Tablero completo de {m_sel} {a_sel} guardado con éxito!")
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -1919,13 +1920,33 @@ if is_editor:
                             s_m_h = "🟢" if row["Dif_Proveedor"] <= 0 else "🔴"
                             render_metric_card(h_col3, f"{s_m_h} Diferencia Proveedor", row["Dif_Proveedor"], c_adeudo_h)
                             
-                            # Renderizar tabla archivada
+                            # Renderizar tabla resumen archivada
                             try:
                                 tabla_archived = pd.read_json(row["Tabla_Resumen"])
                                 st.markdown("##### Resumen de Cuentas del Período")
                                 st.markdown(generar_tabla_html(tabla_archived, bg_header="#f1f5f9"), unsafe_allow_html=True)
-                            except:
-                                st.warning("No se pudo cargar la tabla de este historial.")
+                                
+                                # Renderizar DESGLOSE ARCHIVADO (NUEVO)
+                                if "Tabla_Detalle" in row:
+                                    st.markdown("##### Desglose Individual de Proveedores (Archivado)")
+                                    df_det_arch = pd.read_json(row["Tabla_Detalle"])
+                                    for c_arch in CUENTAS:
+                                        df_cta_arch = df_det_arch[df_det_arch["Clave_Original"] == c_arch].copy()
+                                        if not df_cta_arch.empty:
+                                            # Reconstruir títulos visuales aproximados
+                                            t_ab = df_cta_arch["Pagado a proveedores"].sum()
+                                            t_sl = df_cta_arch["Saldo pendiente"].sum()
+                                            s_ic = '🟢' if t_sl <= 0 else '🔴'
+                                            with st.expander(f"📁 {c_arch} | PAGO:${t_ab:,.0f} | Sal:{s_ic}${t_sl:,.0f}"):
+                                                cols_sh = ["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]
+                                                df_sh = df_cta_arch[cols_sh].rename(columns={
+                                                    "Pagos a realizar_str": "Pago a Realizar",
+                                                    "Pagado a proveedores_str": "Pagado a proveedores",
+                                                    "Saldo pendiente_str": "Saldo pendiente"
+                                                })
+                                                st.markdown(generar_tabla_html(df_sh, bg_header="rgba(200, 200, 200, 0.1)"), unsafe_allow_html=True)
+                            except Exception as e:
+                                st.warning(f"No se pudo cargar el desglose detallado: {e}")
     # 5. GESTIÓN DE PROVEEDORES
     with st.container(border=True):
         # Franjita rosa para gestión
