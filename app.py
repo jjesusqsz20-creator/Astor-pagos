@@ -1322,8 +1322,12 @@ if is_editor:
                     del st.session_state["pago_input"]
                 st.session_state.reset_pago_input = False
             
+            # Asegurar que el widget tenga el valor correcto antes de renderizar (evita reset a 0.01)
+            if "pago_input" not in st.session_state:
+                st.session_state["pago_input"] = st.session_state.get("monto_pago_val", 50000.0)
+            
             st.number_input(f"💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)", 
-                            min_value=0.01, value=st.session_state.get('pago_input', 50000.0), step=100.0, 
+                            min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago)
             monto_ingresado = st.session_state.monto_pago_val
         
@@ -1516,8 +1520,12 @@ if is_editor or is_factura:
                 del st.session_state["ret_input_monto"]
             st.session_state.reset_ret_monto = False
             
+        # Asegurar que el widget tenga el valor correcto antes de renderizar
+        if "ret_input_monto" not in st.session_state:
+            st.session_state["ret_input_monto"] = st.session_state.get("monto_retorno_val", 50000.0)
+            
         monto_r = st.number_input(f"🔄 Monto del Retorno Pagado Global (${st.session_state.get('ret_input_monto', 50000.0):,.2f} MXN)", 
-                                  min_value=0.0, value=st.session_state.get('ret_input_monto', 50000.0), step=100.0, 
+                                  min_value=0.0, step=100.0, 
                                   key="ret_input_monto", on_change=update_retorno)
         
         st.write("<br>", unsafe_allow_html=True)
