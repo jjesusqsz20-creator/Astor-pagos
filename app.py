@@ -630,48 +630,25 @@ def obtener_todos_ingresos_periodo():
     except: return pd.DataFrame(columns=["Mes", "Año", "Ingreso"])
 
 def obtener_ingreso_periodo(mes, anio):
-    # Forzar limpieza de cache para asegurar datos frescos
     obtener_todos_ingresos_periodo.clear()
     df = obtener_todos_ingresos_periodo()
-    if df.empty: return 0.0 # Ya no usamos 2.2M como fallback, devolvemos 0 si no hay dato
+    if df.empty: return 0.0
     
     try:
-        # Normalización agresiva del DataFrame de solo texto
-        temp_df = df.copy()
+        # Búsqueda simple para evitar errores de pandas
+        m_target = str(mes).strip().lower()
+        a_target = str(anio).strip()
         
-        # Identificar columnas por posición física real (0, 1, 2)
-        # Esto es lo más robusto: no importa qué digan los títulos
-        cols_actuales = temp_df.columns.tolist()
-        col_idx_mes = 0
-        col_idx_anio = 1
-        col_idx_ing = 2
-
-        # Búsqueda normalizada sobre la matriz de texto
-        temp_df["Mes_Norm"] = temp_df.iloc[:, col_idx_mes].astype(str).str.strip().str.upper()
-        mes_target = str(mes).strip().upper()
-        
-        temp_df["Anio_Norm"] = pd.to_numeric(temp_df.iloc[:, col_idx_anio], errors='coerce').fillna(0).astype(int)
-        anio_target = int(anio)
-        
-        # Filtrar coincidencias
-        res = temp_df[(temp_df["Mes_Norm"] == mes_target) & (temp_df["Anio_Norm"] == anio_target)]
-        
-        if not res.empty:
-            # Si hay columna de Fecha_Registro (col 3), ordenar por ella para tomar lo ÚLTIMO real
-            if res.shape[1] >= 4:
-                # Intentamos ordenar por la columna de fecha
-                try:
-                    res["Fecha_Dt"] = pd.to_datetime(res.iloc[:, 3], errors='coerce')
-                    res = res.sort_values(by="Fecha_Dt", ascending=True)
-                except: pass
-
-            # Tomamos el último valor de la columna 2 (Ingreso)
-            ultimo_val = res.iloc[-1].iloc[col_idx_ing]
-            # Limpieza exhaustiva de basura en el número
-            s_val = str(ultimo_val).replace("$","").replace(",","").replace(" ","").strip()
-            return float(s_val)
+        # Leemos de abajo hacia arriba (lo más nuevo primero)
+        for i in range(len(df) - 1, -1, -1):
+            row = df.iloc[i]
+            m_row = str(row.iloc[0]).strip().lower()
+            a_row = str(row.iloc[1]).strip()
+            if m_row == m_target and a_row == a_target:
+                raw_val = str(row.iloc[2]).replace("$","").replace(",","").replace(" ","").strip()
+                return float(raw_val) if raw_val else 0.0
     except Exception as e:
-        print(f"Error en búsqueda definitiva de ingreso: {e}")
+        print(f"Error búsqueda simple: {e}")
         
     return 0.0
 
@@ -1148,42 +1125,36 @@ if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
             del st.session_state[key]
     st.rerun()
 
+# --- DIAGNOSTICO TEMPORAL (Solo para esta corrección) ---
+with st.sidebar.expander("🛠️ Debug de Datos (V2)", expanded=False):
+    df_debug = obtener_todos_ingresos_periodo()
+    st.dataframe(df_debug, use_container_width=True)
 
 
 
 
-# --- INTERFAZ GRAFICA (UI) ---
 
-# Inicialización de estados de inputs para etiquetas dinámicas y persistencia
+# --- INICIALIZACIÓN DE ESTADOS ---
 if "sel_mes" not in st.session_state:
     st.session_state.sel_mes = MESES_MAP[datetime.now().month]
 if "sel_anio" not in st.session_state:
     st.session_state.sel_anio = datetime.now().year
 
-# Inicialización de ingreso (independiente del buffer de input)
 if "ingreso_mensual" not in st.session_state:
-    st.session_state.ingreso_mensual = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
-    # Sincronizar el input inmediatamente al cargar por primera vez o refrescar
-    st.session_state.ing_input = st.session_state.ingreso_mensual
+    val_db = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+    st.session_state.ingreso_mensual = val_db
+    # Solo inicializamos el input si no existe ya
+    if "ing_input" not in st.session_state:
+        st.session_state.ing_input = val_db
 
 if "pago_input" not in st.session_state:
     st.session_state.pago_input = 50000.0
 if "monto_pago_val" not in st.session_state:
     st.session_state.monto_pago_val = 50000.0
-
-if "ret_input_monto" not in st.session_state or st.session_state.ret_input_monto == 0:
+if "ret_input_monto" not in st.session_state:
     st.session_state.ret_input_monto = 50000.0
 if "monto_retorno_val" not in st.session_state:
     st.session_state.monto_retorno_val = 50000.0
-
-# Sincronización para etiquetas (labels)
-st.session_state.monto_pago_val = st.session_state.pago_input
-st.session_state.monto_retorno_val = st.session_state.ret_input_monto
-
-# Asegurar que el monto del pago sea válido para el min_value de 0.01
-if st.session_state.pago_input < 0.01:
-    st.session_state.pago_input = 50000.0
-    st.session_state.monto_pago_val = 50000.0
 
 st.title("💸 Inside - Gestión de Rol de Pagos")
 
@@ -1275,10 +1246,10 @@ if is_editor:
         col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
         
         def reload_ingreso():
-            # Al cambiar periodo, recuperamos el último valor guardado
-            valor_guardado = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
+            m = st.session_state.get('sel_mes', MESES_MAP[datetime.now().month])
+            a = st.session_state.get('sel_anio', datetime.now().year)
+            valor_guardado = obtener_ingreso_periodo(m, a)
             st.session_state.ingreso_mensual = valor_guardado
-            # Sincronizamos el input para que refleje lo guardado al cambiar mes/año
             st.session_state.ing_input = valor_guardado
 
         with col_p2:
@@ -1288,9 +1259,9 @@ if is_editor:
             st.number_input("Año", min_value=2020, max_value=2100, key="sel_anio", on_change=reload_ingreso)
 
         with col_p1:
-            # Usamos el valor actual del input para el paréntesis
-            monto_actual = st.session_state.get('ing_input', 0.0)
-            st.number_input(f"💸 Ingreso Mensual (${monto_actual:,.2f} MXN)", 
+            # Usamos el valor actual de la memoria (para el paréntesis)
+            val_p = st.session_state.get('ingreso_mensual', 0.0)
+            st.number_input(f"💸 Ingreso Mensual (${val_p:,.2f} MXN)", 
                             step=1000.0, key="ing_input")
         
         # Botón a lo largo (fuera de las columnas)
@@ -1299,6 +1270,8 @@ if is_editor:
             monto_final = st.session_state.ing_input
             if guardar_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio, monto_final):
                 st.session_state.ingreso_mensual = monto_final
+                # Sincronizamos el input manualmente antes del rerun para que no se borre
+                st.session_state.ing_input = monto_final
                 st.success(f"✅ Pronóstico guardado y aplicado: ${monto_final:,.2f}")
                 time.sleep(1)
                 st.rerun()
