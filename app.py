@@ -1126,10 +1126,10 @@ if st.sidebar.button("🔄 Refrescar Datos", use_container_width=True):
     st.rerun()
 
 # --- INTERFAZ GRAFICA (UI) ---
-
-
-
-
+if "sel_mes" not in st.session_state:
+    st.session_state.sel_mes = MESES_MAP[datetime.now().month]
+if "sel_anio" not in st.session_state:
+    st.session_state.sel_anio = datetime.now().year
 
 if "ing_input" not in st.session_state:
     val_db = obtener_ingreso_periodo(st.session_state.sel_mes, st.session_state.sel_anio)
