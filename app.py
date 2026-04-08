@@ -1758,12 +1758,13 @@ if is_editor:
             
             # --- CUADROS DE TOTALES (IGUAL QUE ARRIBA) ---
             col_inf1, col_inf2, col_inf3, col_inf4, col_inf5 = st.columns([1, 2, 2, 2, 1])
-            render_metric_card(col_inf2, "Total pagado", total_pagado_general, "#3b82f6")
-            render_metric_card(col_inf3, "Retorno por pagar", total_retorno_general, "#f59e0b")
+            render_metric_card(col_inf2, "Total pagado", t_abonado, "#3b82f6")
+            render_metric_card(col_inf3, "Retorno por pagar", t_ret_neto, "#f59e0b")
             
-            color_dif_res = "#10b981" if total_saldo_general <= 0 else "#ef4444"
-            semaforo_res = "🟢" if total_saldo_general <= 0 else "🔴"
-            render_metric_card(col_inf4, f"{semaforo_res} Diferencia Proveedor", total_saldo_general, color_dif_res)
+            # Usar la misma lógica de color y semáforo que arriba para Diferencia Proveedor
+            color_adeudo_res = "#10b981" if adeudo <= 0 else "#ef4444"
+            semaforo_m_res = "🟢" if adeudo <= 0 else "🔴"
+            render_metric_card(col_inf4, f"{semaforo_m_res} Diferencia Proveedor", adeudo, color_adeudo_res)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.divider()
