@@ -1633,32 +1633,27 @@ if is_editor:
                 st.warning(f"⚠️ Atención: Los porcentajes no suman 100% para algunas cuentas. El tablero se habilitará cuando la configuración sea correcta.")
             else:
                 # 4. TABLERO DE CONTROL 
-                with st.container(border=True):
-                    st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-                    st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
+                df_h_ret_dash = obtener_datos_retorno()
+                if not df_h_ret_dash.empty:
+                    df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Estado"] != "Inactivo"]
                     
-                    df_h_ret_dash = obtener_datos_retorno()
-                    if not df_h_ret_dash.empty:
-                        df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Estado"] != "Inactivo"]
-                        
-                    df_h_manual_dash = obtener_datos_retorno_manual()
-                    if not df_h_manual_dash.empty:
-                        df_h_manual_dash = df_h_manual_dash[df_h_manual_dash["Estado"] != "Inactivo"]
-                    
-                    if not df_h_ret_dash.empty:
-                        # AUDITORÍA: Ver todos los retornos que tengan impacto en saldos (independiente de la selección actual)
-                        # (Lógica de tabla movida abajo para esperar cálculo de saldos)
-                        pass
-                        st.divider()
-                    else:
-                        st.info("No hay retornos registrados en el periodo seleccionado.")
-                    
-                    # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
-                    df_historial = obtener_datos()
-                    if not df_historial.empty:
-                        df_historial = df_historial[df_historial["Estado"] != "Inactivo"]
-                        if "Cuenta" in df_historial.columns:
-                            df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
+                df_h_manual_dash = obtener_datos_retorno_manual()
+                if not df_h_manual_dash.empty:
+                    df_h_manual_dash = df_h_manual_dash[df_h_manual_dash["Estado"] != "Inactivo"]
+                
+                if not df_h_ret_dash.empty:
+                    # AUDITORÍA: Ver todos los retornos que tengan impacto en saldos (independiente de la selección actual)
+                    # (Lógica de tabla movida abajo para esperar cálculo de saldos)
+                    pass
+                else:
+                    st.info("No hay retornos registrados en el periodo seleccionado.")
+                
+                # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
+                df_historial = obtener_datos()
+                if not df_historial.empty:
+                    df_historial = df_historial[df_historial["Estado"] != "Inactivo"]
+                    if "Cuenta" in df_historial.columns:
+                        df_historial["Cuenta"] = df_historial["Cuenta"].replace(MAPEO_NOMBRES_ANTIGUOS)
         except Exception as e:
             st.error(f"Error procesando el tablero: {e}")
     
@@ -1753,7 +1748,8 @@ if is_editor:
         # --- TABLA DE RESUMEN SINCRONIZADA ---
         with st.container(border=True):
             st.markdown('<div style="background-color: #6366f1; height: 6px; margin: -1.0rem -1.0rem 1rem -1.0rem; border-radius: 10px 10px 0 0;"></div>', unsafe_allow_html=True)
-            st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>🔄 Resumen de Retornos por Cuenta</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='margin-top: -0.5rem; color: #312e81; font-weight: 800;'>📊 Tablero de Control - Pagos por realizar</h4>", unsafe_allow_html=True)
+            st.markdown("<h5 style='color: #4b5563; font-weight: 700; margin-bottom: 1rem;'>🔄 Resumen de Retornos por Cuenta</h5>", unsafe_allow_html=True)
             
             df_ret_final_dash = pd.DataFrame(resumen_ret_dash)
             st.markdown(generar_tabla_html(df_ret_final_dash, bg_header="#e0e7ff"), unsafe_allow_html=True)
