@@ -452,11 +452,18 @@ def get_db_sheets(_client):
         sheet_config_ingresos.append_row(["Mes", "Año", "Ingreso", "Fecha_Registro"])
 
     # 7. Hoja de Historial de Tablero de Control
+    headers_hist = ["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagar", "Comision_Inside", "Retorno_Pagado", "Dif_Proveedor", "Tabla_Resumen", "Tabla_Detalle", "Fecha_Snapshot", "Usuario"]
     if "Tablero_Historial" in hojas_nombres:
         sheet_historial_tablero = spreadsheet.worksheet("Tablero_Historial")
+        # Forzar actualización de encabezados si están incompletos (V3)
+        try:
+            first_row = sheet_historial_tablero.row_values(1)
+            if len(first_row) < len(headers_hist):
+                sheet_historial_tablero.update("A1:L1", [headers_hist])
+        except: pass
     else:
         sheet_historial_tablero = spreadsheet.add_worksheet(title="Tablero_Historial", rows="100", cols="13")
-        sheet_historial_tablero.append_row(["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagar", "Comision_Inside", "Retorno_Pagado", "Dif_Proveedor", "Tabla_Resumen", "Tabla_Detalle", "Fecha_Snapshot", "Usuario"])
+        sheet_historial_tablero.append_row(headers_hist)
 
     return {
         "spreadsheet": spreadsheet,
@@ -1907,7 +1914,11 @@ if is_editor:
                         a_h = row["Año"]
                         with st.container(border=True):
                             st.markdown(f"#### 📅 Periodo: {m_h} {a_h}")
-                            st.caption(f"Cerrado el {row['Fecha_Snapshot']}")
+                            fecha_txt = str(row.get('Fecha_Snapshot', '---'))
+                            # Limpieza de seguridad: si es JSON por error de columnas, intentar mostrar algo útil o vacío
+                            if "[" in fecha_txt or "{" in fecha_txt:
+                                fecha_txt = "Disponible en Google Sheets"
+                            st.caption(f"Cerrado el {fecha_txt}")
                             st.write("")
                             # Renderizar métricas archivadas
                             h_col1, h_col2, h_col3 = st.columns(3)
