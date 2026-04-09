@@ -1912,7 +1912,12 @@ if is_editor:
                     st.markdown("##### 📝 Resumen Global de Cierres")
                     
                     df_res_view = df_hist[["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagado", "Dif_Proveedor", "Usuario"]].copy()
-                    st.dataframe(df_res_view, use_container_width=True, hide_index=True)
+                    # Formatear números para estética premium
+                    df_res_view["Año"] = df_res_view["Año"].astype(str)
+                    for c_fmt in ["Ingreso_Total", "Total_Pagado", "Retorno_Pagado", "Dif_Proveedor"]:
+                        df_res_view[c_fmt] = df_res_view[c_fmt].apply(lambda x: f"${pd.to_numeric(x, errors='coerce'):,.0f}")
+                        
+                    st.markdown(generar_tabla_html(df_res_view, bg_header="#e0e7ff"), unsafe_allow_html=True)
                     
                     st.divider()
                     
