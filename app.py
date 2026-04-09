@@ -1900,27 +1900,39 @@ if is_editor:
                         }, inplace=True)
                         st.markdown(generar_tabla_html(df_disp, bg_header=bg_color), unsafe_allow_html=True)
             
-            # --- HISTORIAL DE TABLERO DE CONTROL (NUEVO) ---
+            # --- HISTORIAL DE TABLERO DE CONTROL (Opcion 2: Resumen + Detalle) ---
             st.write("<br>", unsafe_allow_html=True)
             with st.expander("🕒 Ver Historial de Tablero de Control (Meses Cerrados)", expanded=False):
                 df_hist = obtener_historial_tablero()
                 if df_hist.empty:
                     st.info("Aún no hay cierres mensuales registrados.")
                 else:
-                    # Ordenar por año y mes (aproximado)
+                    # 1. Tabla Maestra de Resumen
                     df_hist = df_hist.sort_values(by=["Año", "Mes"], ascending=False)
-                    for _, row in df_hist.iterrows():
-                        m_h = row["Mes"]
-                        a_h = row["Año"]
+                    st.markdown("##### 📝 Resumen Global de Cierres")
+                    
+                    df_res_view = df_hist[["Mes", "Año", "Ingreso_Total", "Total_Pagado", "Retorno_Pagado", "Dif_Proveedor", "Usuario"]].copy()
+                    st.dataframe(df_res_view, use_container_width=True, hide_index=True)
+                    
+                    st.divider()
+                    
+                    # 2. Selector de Detalle Específico
+                    df_hist["Tag_Detail"] = df_hist.apply(lambda r: f"📄 {r['Mes']} {r['Año']}", axis=1)
+                    opciones_h = ["--- Seleccionar un mes para ver detalle ---"] + df_hist["Tag_Detail"].tolist()
+                    sel_h = st.selectbox("🔍 Buscar desglose detallado", opciones_h)
+                    
+                    if sel_h != opciones_h[0]:
+                        row = df_hist[df_hist["Tag_Detail"] == sel_h].iloc[0]
+                        m_h = row["Mes"]; a_h = row["Año"]
+                        
                         with st.container(border=True):
-                            st.markdown(f"#### 📅 Periodo: {m_h} {a_h}")
+                            st.markdown(f"### 📑 Detalle Completo: {m_h} {a_h}")
                             fecha_txt = str(row.get('Fecha_Snapshot', '---'))
-                            # Limpieza de seguridad: si es JSON por error de columnas, intentar mostrar algo útil o vacío
-                            if "[" in fecha_txt or "{" in fecha_txt:
-                                fecha_txt = "Disponible en Google Sheets"
-                            st.caption(f"Cerrado el {fecha_txt}")
+                            if "[" in fecha_txt or "{" in fecha_txt: fecha_txt = "Disponible en Sheets"
+                            st.caption(f"Registro capturado el {fecha_txt} por {row['Usuario']}")
                             st.write("")
-                            # Renderizar métricas archivadas
+                            
+                            # Renderizar métricas archivadas (Cards)
                             h_col1, h_col2, h_col3 = st.columns(3)
                             render_metric_card(h_col1, "Total pagado", row["Total_Pagado"], "#3b82f6")
                             render_metric_card(h_col2, "Retorno por pagar", row["Total_Pagado"] - row["Comision_Inside"] - row["Retorno_Pagado"], "#f59e0b")
@@ -1929,25 +1941,32 @@ if is_editor:
                             s_m_h = "🟢" if row["Dif_Proveedor"] <= 0 else "🔴"
                             render_metric_card(h_col3, f"{s_m_h} Diferencia Proveedor", row["Dif_Proveedor"], c_adeudo_h)
                             
-                            # Renderizar tabla resumen archivada
+                            # Renderizar tablas archivadas
                             try:
+                                # A. Resumen de Cuentas
                                 tabla_archived = pd.read_json(row["Tabla_Resumen"])
-                                st.markdown("##### Resumen de Cuentas del Período")
+                                st.markdown("##### 📊 Resumen de Cuentas del Período")
                                 st.markdown(generar_tabla_html(tabla_archived, bg_header="#f1f5f9"), unsafe_allow_html=True)
                                 
-                                # Renderizar DESGLOSE ARCHIVADO (NUEVO)
+                                # B. Desglose detallado por Proveedor
                                 if "Tabla_Detalle" in row:
-                                    st.markdown("##### Desglose Individual de Proveedores (Archivado)")
+                                    st.write("<br>", unsafe_allow_html=True)
+                                    st.markdown("##### 👤 Desglose Individual de Proveedores (Archivado)")
                                     df_det_arch = pd.read_json(row["Tabla_Detalle"])
+                                    
+                                    # Agrupar por cuenta para mostrar expanders limpios (ahora que no están anidados en otro st.expander)
                                     for c_arch in CUENTAS:
                                         df_cta_arch = df_det_arch[df_det_arch["Clave_Original"] == c_arch].copy()
                                         if not df_cta_arch.empty:
-                                            # Reconstruir títulos visuales aproximados
                                             t_ab = df_cta_arch["Pagado a proveedores"].sum()
                                             t_sl = df_cta_arch["Saldo pendiente"].sum()
                                             s_ic = '🟢' if t_sl <= 0 else '🔴'
+                                            
+                                            # Podemos volver a usar st.expander aquí porque YA NO ESTÁ dentro de otro expander (el principal está cerrado para el detalle)
+                                            # ACTUALIZACIÓN: Debido a que seguimos dentro de 'with st.expander("Ver Historial")', seguimos sin poder usar expanders internos.
+                                            # Mantendremos st.container con diseño mejorado.
                                             with st.container(border=True):
-                                                st.markdown(f"**📂 {c_arch} | PAGO:${t_ab:,.0f} | Sal:{s_ic}${t_sl:,.0f}**")
+                                                st.markdown(f"**🏦 {c_arch} | PAGO:${t_ab:,.0f} | Sal:{s_ic}${t_sl:,.0f}**")
                                                 cols_sh = ["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]
                                                 df_sh = df_cta_arch[cols_sh].rename(columns={
                                                     "Pagos a realizar_str": "Pago a Realizar",
