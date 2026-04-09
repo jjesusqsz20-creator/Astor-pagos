@@ -1916,6 +1916,9 @@ if is_editor:
                     df_res_view["Año"] = df_res_view["Año"].astype(str)
                     for c_fmt in ["Ingreso_Total", "Total_Pagado", "Retorno_Pagado", "Dif_Proveedor"]:
                         df_res_view[c_fmt] = df_res_view[c_fmt].apply(lambda x: f"${pd.to_numeric(x, errors='coerce'):,.0f}")
+                    
+                    # Limpiar encabezados (quitar guiones bajos)
+                    df_res_view.columns = [c.replace("_", " ") for c in df_res_view.columns]
                         
                     st.markdown(generar_tabla_html(df_res_view, bg_header="#e0e7ff"), unsafe_allow_html=True)
                     
