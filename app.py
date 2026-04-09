@@ -1711,11 +1711,11 @@ if is_editor:
                 st.warning(f"⚠️ Atención: Los porcentajes no suman 100% para algunas cuentas. El tablero se habilitará cuando la configuración sea correcta.")
             else:
                 # 4. TABLERO DE CONTROL 
-                df_h_ret_dash = obtener_datos_retorno()
+                df_h_ret_dash = df_gl_retorno
                 if not df_h_ret_dash.empty:
                     df_h_ret_dash = df_h_ret_dash[df_h_ret_dash["Estado"] != "Inactivo"]
                     
-                df_h_manual_dash = obtener_datos_retorno_manual()
+                df_h_manual_dash = df_gl_manual
                 if not df_h_manual_dash.empty:
                     df_h_manual_dash = df_h_manual_dash[df_h_manual_dash["Estado"] != "Inactivo"]
                 
@@ -1727,7 +1727,7 @@ if is_editor:
                     st.info("No hay retornos registrados en el periodo seleccionado.")
                 
                 # --- CARGA DE DATOS PARA TABLAS DE REPARTO ---
-                df_historial = obtener_datos()
+                df_historial = df_gl_abono
                 if not df_historial.empty:
                     df_historial = df_historial[df_historial["Estado"] != "Inactivo"]
                     if "Cuenta" in df_historial.columns:
