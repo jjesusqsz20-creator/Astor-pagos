@@ -1905,7 +1905,10 @@ if is_editor:
                     for _, row in df_hist.iterrows():
                         m_h = row["Mes"]
                         a_h = row["Año"]
-                        with st.expander(f"📁 Tablero de {m_h} {a_h} (Cerrado el {row['Fecha_Snapshot']})"):
+                        with st.container(border=True):
+                            st.markdown(f"#### 📅 Periodo: {m_h} {a_h}")
+                            st.caption(f"Cerrado el {row['Fecha_Snapshot']}")
+                            st.write("")
                             # Renderizar métricas archivadas
                             h_col1, h_col2, h_col3 = st.columns(3)
                             render_metric_card(h_col1, "Total pagado", row["Total_Pagado"], "#3b82f6")
@@ -1932,7 +1935,8 @@ if is_editor:
                                             t_ab = df_cta_arch["Pagado a proveedores"].sum()
                                             t_sl = df_cta_arch["Saldo pendiente"].sum()
                                             s_ic = '🟢' if t_sl <= 0 else '🔴'
-                                            with st.expander(f"📁 {c_arch} | PAGO:${t_ab:,.0f} | Sal:{s_ic}${t_sl:,.0f}"):
+                                            with st.container(border=True):
+                                                st.markdown(f"**📂 {c_arch} | PAGO:${t_ab:,.0f} | Sal:{s_ic}${t_sl:,.0f}**")
                                                 cols_sh = ["Proveedor", "Porcentaje", "Pagos a realizar_str", "Pagado a proveedores_str", "Saldo pendiente_str"]
                                                 df_sh = df_cta_arch[cols_sh].rename(columns={
                                                     "Pagos a realizar_str": "Pago a Realizar",
