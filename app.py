@@ -360,10 +360,6 @@ if "vista_auth" not in st.session_state:
     st.session_state.vista_auth = "login"
 if "config_panel_open" not in st.session_state:
     st.session_state.config_panel_open = False
-if "monto_pago_val" not in st.session_state:
-    st.session_state.monto_pago_val = 0.0
-if "monto_ret_val" not in st.session_state:
-    st.session_state.monto_ret_val = 0.0
 
 # --- PARAMETROS DE NEGOCIO ---
 CUENTAS = [
@@ -1367,11 +1363,10 @@ if is_editor:
                     <b>💰 Monto Pago (${st.session_state.get('pago_input', 50000.0):,.2f} MXN)</b>
                 </p>
             """, unsafe_allow_html=True)
-            st.number_input("Monto del Pago", 
+            monto_ingresado = st.number_input("Monto del Pago", 
                             min_value=0.01, step=100.0, 
                             key="pago_input", on_change=update_pago,
                             label_visibility="collapsed")
-            monto_ingresado = st.session_state.monto_pago_val
         
         st.write("<br>", unsafe_allow_html=True)
         btn_guardar = st.button("Guardar Registro", type="primary", use_container_width=True)
