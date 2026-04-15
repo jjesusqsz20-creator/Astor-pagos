@@ -787,11 +787,27 @@ def obtener_datos_resiliente(_sheet_obj, expected_cols):
             if col in df.columns:
                 df[col] = df[col].apply(limpiar_numerico)
 
-        # Normalización de nombres de columnas comunes
-        rename_map = {"Monto": "Monto Total", "Tiket": "Ticket", "Pago Total PV": "Monto Total", "Pagado a proveedores": "Monto Total"}
-        for old, new in rename_map.items():
-            if old in df.columns and new not in df.columns:
-                df.rename(columns={old: new}, inplace=True)
+        # Normalización de nombres de columnas comunes (Mapeo robusto)
+        rename_map = {
+            'ticket': 'Ticket', 'tiket': 'Ticket', 'id': 'Ticket',
+            'fecha': 'Fecha', 'date': 'Fecha',
+            'cuenta': 'Cuenta', 'account': 'Cuenta',
+            'proveedor': 'Proveedor', 'provider': 'Proveedor',
+            'monto': 'Monto Total', 'monto total': 'Monto Total', 'amount': 'Monto Total',
+            'registrado por': 'Registrado por', 'usuario': 'Registrado por', 'user': 'Registrado por',
+            'estatus': 'Estado', 'status': 'Estado', 'estado': 'Estado', 'true/false': 'Estado'
+        }
+        
+        cols_finales = []
+        nombres_vistos = set()
+        for col in df.columns:
+            nueva_col = rename_map.get(col.lower().strip(), col)
+            if nueva_col in nombres_vistos:
+                nueva_col = f"{nueva_col}_duplicada"
+            cols_finales.append(nueva_col)
+            nombres_vistos.add(nueva_col)
+            
+        df.columns = cols_finales
 
         # Compatibilidad: Si existe 'Cuenta' pero no 'Nombre' o 'Banco', desglosarlos
         if "Cuenta" in df.columns:
@@ -959,8 +975,13 @@ def inactivar_pago(ticket_id, usuario_nombre):
         if row_found == -1:
             return False, f"Ticket #{ticket_id} no encontrado en la hoja."
             
+        # Actualizar TODAS las columnas que representen el estado (texto y checkbox)
         sheet.update_cell(row_found, idx_status + 1, "Inactivo")
         
+        # Si existe la variante true/false y es distinta a idx_status, tambien actualizarla
+        if "true/false" in header_map and header_map["true/false"] != idx_status:
+            sheet.update_cell(row_found, header_map["true/false"] + 1, "False")
+            
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Inactivación", "Activo", "Inactivo"])
         
@@ -998,7 +1019,9 @@ def reactivar_pago(ticket_id, usuario_nombre):
         if row_found == -1: return False, "Ticket no encontrado."
             
         sheet.update_cell(row_found, idx_status + 1, "Activo")
-        
+        if "true/false" in header_map and header_map["true/false"] != idx_status:
+            sheet.update_cell(row_found, header_map["true/false"] + 1, "True")
+            
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Reactivación", "Inactivo", "Activo"])
         
@@ -1045,7 +1068,9 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         if row_found == -1: return False, f"Ticket #{ticket_id} no encontrado."
             
         sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Inactivo")
-        
+        if "true/false" in header_map and header_map["true/false"] != idx_status:
+            sheet_retorno_manual.update_cell(row_found, header_map["true/false"] + 1, "False")
+            
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, "---", ticket_id, "Inactivación", "Activo", "Inactivo"])
         obtener_datos_retorno_manual.clear()
@@ -1085,7 +1110,9 @@ def reactivar_retorno_manual(ticket_id, usuario_nombre):
         if row_found == -1: return False, "No se encontró el Ticket."
             
         sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Activo")
-        
+        if "true/false" in header_map and header_map["true/false"] != idx_status:
+            sheet_retorno_manual.update_cell(row_found, header_map["true/false"] + 1, "True")
+            
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, "---", ticket_id, "Reactivación", "Inactivo", "Activo"])
         
