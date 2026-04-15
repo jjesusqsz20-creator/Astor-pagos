@@ -927,22 +927,30 @@ def inactivar_pago(ticket_id, usuario_nombre):
     """Marca un abono como Inactivo en Google Sheets y registra en auditoría."""
     try:
         data = sheet.get_all_values()
+        if not data: return False
+        
         headers = [h.strip() for h in data[0]]
-        if "Ticket" not in headers: return False
+        if "Ticket" not in headers:
+            print(f"[ERROR] Columna 'Ticket' no encontrada en abonos")
+            return False
         
         idx_t = headers.index("Ticket")
         idx_status = headers.index("Estado") if "Estado" in headers else -1
         
+        # Crear columna de Estado si no existe
         if idx_status == -1:
             sheet.update_cell(1, len(headers) + 1, "Estado")
             idx_status = len(headers)
         
         row_found = -1
         for i, row in enumerate(data[1:], 2):
-            if str(row[idx_t]) == str(ticket_id):
+            if len(row) > idx_t and str(row[idx_t]).strip() == str(ticket_id).strip():
                 row_found = i; break
         
-        if row_found == -1: return False
+        if row_found == -1:
+            print(f"[ERROR] Ticket #{ticket_id} no encontrado para inactivar")
+            return False
+            
         sheet.update_cell(row_found, idx_status + 1, "Inactivo")
         
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -951,14 +959,20 @@ def inactivar_pago(ticket_id, usuario_nombre):
         # Notificar a administradores sobre la eliminación
         enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de abono", detalle=f"Ticket #{ticket_id}")
         return True
-    except: return False
+    except Exception as e:
+        print(f"[ERROR] Excepción en inactivar_pago: {e}")
+        return False
 
 def inactivar_retorno_manual(ticket_id, usuario_nombre):
     """Marca un retorno manual como Inactivo en Google Sheets y registra en auditoría."""
     try:
         data = sheet_retorno_manual.get_all_values()
+        if not data: return False
+        
         headers = [h.strip() for h in data[0]]
-        if "Ticket" not in headers: return False
+        if "Ticket" not in headers:
+            print(f"[ERROR] Columna 'Ticket' no encontrada en retorno manual")
+            return False
         
         idx_t = headers.index("Ticket")
         idx_status = headers.index("Estado") if "Estado" in headers else -1
@@ -969,10 +983,13 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         
         row_found = -1
         for i, row in enumerate(data[1:], 2):
-            if str(row[idx_t]) == str(ticket_id):
+            if len(row) > idx_t and str(row[idx_t]).strip() == str(ticket_id).strip():
                 row_found = i; break
         
-        if row_found == -1: return False
+        if row_found == -1:
+            print(f"[ERROR] Ticket #{ticket_id} no encontrado en retorno manual")
+            return False
+            
         sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Inactivo")
         
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -982,7 +999,9 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         # Notificar a administradores sobre la eliminación
         enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de retorno", detalle=f"Ticket #{ticket_id}")
         return True
-    except: return False
+    except Exception as e:
+        print(f"[ERROR] Excepción en inactivar_retorno_manual: {e}")
+        return False
 
 
 
