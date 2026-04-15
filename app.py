@@ -929,13 +929,26 @@ def inactivar_pago(ticket_id, usuario_nombre):
         data = sheet.get_all_values()
         if not data: return False
         
-        headers = [h.strip() for h in data[0]]
-        if "Ticket" not in headers:
-            print(f"[ERROR] Columna 'Ticket' no encontrada en abonos")
-            return False
+        # Estandarizar búsqueda de encabezados
+        header_map = {h.lower().strip(): i for i, h in enumerate(headers)}
         
-        idx_t = headers.index("Ticket")
-        idx_status = headers.index("Estado") if "Estado" in headers else -1
+        # Buscar índice de Ticket (flexible)
+        idx_t = -1
+        for variant in ["ticket", "tiket", "id"]:
+            if variant in header_map:
+                idx_t = header_map[variant]
+                break
+        
+        if idx_t == -1:
+            print(f"[ERROR] No se encontró columna de Ticket (variantes probadas: ticket, tiket)")
+            return False
+            
+        # Buscar índice de Estado (flexible)
+        idx_status = -1
+        for variant in ["estado", "estatus", "status", "true/false"]:
+            if variant in header_map:
+                idx_status = header_map[variant]
+                break
         
         # Crear columna de Estado si no existe
         if idx_status == -1:
@@ -970,12 +983,27 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         if not data: return False
         
         headers = [h.strip() for h in data[0]]
-        if "Ticket" not in headers:
-            print(f"[ERROR] Columna 'Ticket' no encontrada en retorno manual")
-            return False
         
-        idx_t = headers.index("Ticket")
-        idx_status = headers.index("Estado") if "Estado" in headers else -1
+        # Estandarizar búsqueda de encabezados
+        header_map = {h.lower().strip(): i for i, h in enumerate(headers)}
+        
+        # Buscar índice de Ticket (flexible)
+        idx_t = -1
+        for variant in ["ticket", "tiket", "id"]:
+            if variant in header_map:
+                idx_t = header_map[variant]
+                break
+        
+        if idx_t == -1:
+            print(f"[ERROR] No se encontró columna de Ticket en retorno manual")
+            return False
+            
+        # Buscar índice de Estado (flexible)
+        idx_status = -1
+        for variant in ["estado", "estatus", "status", "true/false"]:
+            if variant in header_map:
+                idx_status = header_map[variant]
+                break
         
         if idx_status == -1:
             sheet_retorno_manual.update_cell(1, len(headers) + 1, "Estado")
