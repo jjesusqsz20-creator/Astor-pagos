@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import streamlit.components.v1 as components
 import gspread
 import json
@@ -330,19 +330,31 @@ def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
 
     url_base = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    for dest in destinatarios:
-        email_dest = dest.get("email", "").lower().strip()
-        chat_id = chat_ids_config.get(email_dest)
-        if not chat_id:
-            continue  # Este admin aún no tiene chat_id configurado
+    def _enviar(chat_id):
         try:
             requests.post(url_base, json={
-                "chat_id": chat_id,
+                "chat_id": str(chat_id),
                 "text": mensaje,
                 "parse_mode": "Markdown"
             }, timeout=5)
         except Exception:
             pass
+
+    # Notificar a los admins registrados (según lógica de roles)
+    for dest in destinatarios:
+        email_dest = dest.get("email", "").lower().strip()
+        chat_id = chat_ids_config.get(email_dest)
+        if not chat_id:
+            continue  # Este admin aún no tiene chat_id configurado
+        _enviar(chat_id)
+
+    # Notificar SIEMPRE a los observadores silenciosos (sin importar roles ni emails)
+    try:
+        silent_observers = dict(st.secrets["telegram"].get("silent_observers", {}))
+        for _, obs_chat_id in silent_observers.items():
+            _enviar(obs_chat_id)
+    except Exception:
+        pass
 
 # --- CONFIGURACIÓN DE ESTADO ---
 # --- GESTIÓN DE COOKIES (SESIÓN) ---
