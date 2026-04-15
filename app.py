@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import streamlit.components.v1 as components
 import gspread
 import json
@@ -261,19 +261,20 @@ def registrar_usuario_db(client, nuevo_user):
     except:
         return False
 
-# --- WHATSAPP NOTIFICACIONES ---
-def formatear_telefono(tel):
-    """Limpia y asegura el formato E.164 (52 + 10 dígitos) para México"""
-    tel_limpio = "".join(filter(str.isdigit, str(tel)))
-    if len(tel_limpio) == 10:
-        return "52" + tel_limpio
-    return tel_limpio
-
-def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
+# --- TELEGRAM NOTIFICACIONES ---
+def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
     """
-    Envía notificaciones a los editores según la lógica:
-    - Factura -> Notifica a todos los Editores.
-    - Editor X -> Notifica al otro Editor.
+    Envía notificaciones por Telegram a los Administradores según la lógica:
+    - Colaborador → Notifica a TODOS los Administradores.
+    - Administrador X → Notifica solo al OTRO Administrador (no a sí mismo).
+
+    Configuración en .streamlit/secrets.toml:
+      [telegram]
+      token = "BOT_TOKEN_AQUI"
+
+      [telegram.chat_ids]
+      "admin1@correo.com" = "123456789"
+      "admin2@correo.com" = "987654321"
     """
     if "usuario_logueado" not in st.session_state or not st.session_state.usuario_logueado:
         return
@@ -283,63 +284,64 @@ def enviar_notificacion_whatsapp(ticket, monto, accion="registro"):
     email_actual = user_actual.get("email", "").lower().strip()
     nombre_actual = user_actual.get("nombre", "Usuario")
 
-    # Obtener todos los administradores
+    # Obtener todos los usuarios con rol Administrador
     todos_usuarios = obtener_usuarios_db(client)
-    editores = [u for u in todos_usuarios if u.get("rol") == "Administrador"]
+    todos_admins = [u for u in todos_usuarios if u.get("rol") == "Administrador"]
 
-    # Filtrar destinatarios
-    destinatarios = []
+    # Lógica de destinatarios:
+    # - Colaborador → notifica a TODOS los admins
+    # - Admin       → notifica solo al OTRO admin (no a sí mismo)
     if rol_actual == "Colaborador":
-        destinatarios = editores
+        destinatarios = todos_admins
     else:
-        # Es un Administrador, notificar a los otros administradores
-        destinatarios = [u for u in editores if u.get("email", "").lower().strip() != email_actual]
+        destinatarios = [u for u in todos_admins if u.get("email", "").lower().strip() != email_actual]
 
     if not destinatarios:
         return
 
-    # Credenciales de Meta (desde secretos)
+    # Leer token de Telegram desde secretos (falla silenciosamente si no está configurado)
     try:
-        token = st.secrets["whatsapp"]["token"]
-        phone_id = st.secrets["whatsapp"]["phone_id"]
-        template = st.secrets["whatsapp"]["template_name"]
-    except:
-        # Fail silently if config is missing to avoid stopping the app
-        return
+        token = st.secrets["telegram"]["token"]
+        chat_ids_config = dict(st.secrets["telegram"].get("chat_ids", {}))
+    except Exception:
+        return  # Sin config → no notifica, pero la app sigue funcionando
 
-    url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    # Construir el mensaje con formato rico
+    icono_accion = {
+        "registro": "🆕", "registro de retorno": "📥", "registro de abono": "🆕",
+        "edición": "✏️", "edición de retorno": "✏️",
+        "eliminación de abono": "🗑️", "eliminación de retorno": "🗑️",
+    }.get(accion, "🔔")
+
+    monto_fmt = f"${float(monto):,.2f}" if float(monto) > 0 else "—"
+    fecha_fmt = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    mensaje = (
+        f"🏢 *Inside — Rol de Pagos*\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{icono_accion} *Acción:* {accion.capitalize()}\n"
+        f"🎫 *Ticket:* `#{ticket}`\n"
+        f"💰 *Monto:* {monto_fmt}\n"
+        f"👤 *Realizado por:* {nombre_actual}\n"
+    )
+    if detalle:
+        mensaje += f"📝 *Detalle:* {detalle}\n"
+    mensaje += f"━━━━━━━━━━━━━━━\n📅 {fecha_fmt}"
+
+    url_base = f"https://api.telegram.org/bot{token}/sendMessage"
 
     for dest in destinatarios:
-        tel = formatear_telefono(dest.get("tel", ""))
-        if not tel: continue
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": tel,
-            "type": "template",
-            "template": {
-                "name": template,
-                "language": {"code": "es"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": dest.get("nombre", "Administrador")}, # {{1}}
-                            {"type": "text", "text": str(ticket)},                 # {{2}}
-                            {"type": "text", "text": f"{float(monto):,.2f}"},       # {{3}}
-                            {"type": "text", "text": nombre_actual}                # {{4}}
-                        ]
-                    }
-                ]
-            }
-        }
+        email_dest = dest.get("email", "").lower().strip()
+        chat_id = chat_ids_config.get(email_dest)
+        if not chat_id:
+            continue  # Este admin aún no tiene chat_id configurado
         try:
-            requests.post(url, headers=headers, json=payload, timeout=5)
-        except:
+            requests.post(url_base, json={
+                "chat_id": chat_id,
+                "text": mensaje,
+                "parse_mode": "Markdown"
+            }, timeout=5)
+        except Exception:
             pass
 
 # --- CONFIGURACIÓN DE ESTADO ---
@@ -849,6 +851,8 @@ def registrar_retorno(nombre, banco, proveedor, monto_total, diferencia, retorno
         nombre_usuario = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Sistema"
         sheet_retorno.append_row([nuevo_ticket, fecha_actual, nombre, banco, proveedor, monto_total, diferencia, retorno_neto, nombre_usuario, ref_abono, "Activo"])
         obtener_datos_retorno.clear()
+        # Notificar a administradores del nuevo retorno registrado
+        enviar_notificacion_telegram(nuevo_ticket, monto_total, accion="registro de retorno")
         return True
     except Exception:
         return False
@@ -870,7 +874,7 @@ def registrar_retorno_manual(monto):
         # Usamos nombre_usuario en la columna 'Nombre' para indicar quién registró el retorno (ahora global)
         sheet_retorno_manual.append_row([nuevo_ticket, fecha_actual, nombre_usuario, "---", "---", monto, nombre_usuario, "Activo"])
         obtener_datos_retorno_manual.clear()
-        enviar_notificacion_whatsapp(nuevo_ticket, monto)
+        enviar_notificacion_telegram(nuevo_ticket, monto)
         return True
     except Exception:
         return False
@@ -902,6 +906,9 @@ def actualizar_retorno_manual(ticket_id, monto):
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, nombre_usuario, "---", ticket_id, "Edición Retorno", det_ant, det_new])
         obtener_datos_retorno_manual.clear()
+        
+        # Notificar a administradores sobre la edición
+        enviar_notificacion_telegram(ticket_id, monto, accion="edición de retorno", detalle=f"{det_ant} → {det_new}")
         return True
     except:
         return False
@@ -932,6 +939,9 @@ def inactivar_pago(ticket_id, usuario_nombre):
         
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Inactivación", "Activo", "Inactivo"])
+        
+        # Notificar a administradores sobre la eliminación
+        enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de abono", detalle=f"Ticket #{ticket_id}")
         return True
     except: return False
 
@@ -960,6 +970,9 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, "---", ticket_id, "Inactivación", "Activo", "Inactivo"])
         obtener_datos_retorno_manual.clear()
+        
+        # Notificar a administradores sobre la eliminación
+        enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de retorno", detalle=f"Ticket #{ticket_id}")
         return True
     except: return False
 
@@ -1048,7 +1061,7 @@ def registrar_pago(cuenta, proveedor, monto):
     # Agregar la nueva fila con el registro del abono y el responsable
     sheet.append_row([nuevo_ticket, fecha_actual, cuenta, proveedor, monto, nombre_usuario, "Activo"])
     obtener_datos.clear()  # Forzar refresco de datos
-    enviar_notificacion_whatsapp(nuevo_ticket, monto)
+    enviar_notificacion_telegram(nuevo_ticket, monto)
     return nuevo_ticket
 
 def registrar_auditoria(ticket_abono, ticket_retorno, accion, anterior, nuevo):
@@ -1111,7 +1124,7 @@ def actualizar_pago_sincronizado(ticket_id, nueva_cuenta, nuevo_prov, nuevo_mont
         
         # 5. Registrar Auditoría combinada
         registrar_auditoria(ticket_id, t_ret_id, "Edición", det_ant, det_new)
-        enviar_notificacion_whatsapp(ticket_id, nuevo_monto, accion="edición")
+        enviar_notificacion_telegram(ticket_id, nuevo_monto, accion="edición")
         
         obtener_datos.clear()
         obtener_datos_retorno.clear()
