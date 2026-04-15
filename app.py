@@ -296,19 +296,32 @@ def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
     else:
         destinatarios = [u for u in todos_admins if u.get("email", "").lower().strip() != email_actual]
 
-    if not destinatarios:
-        return
-
-    # Leer token de Telegram desde secretos (falla silenciosamente si no está configurado)
+    # 4. Leer token y configuraciones de Telegram
     try:
         token = st.secrets["telegram"]["token"]
         chat_ids_config = dict(st.secrets["telegram"].get("chat_ids", {}))
-        print(f"[TELEGRAM] Token cargado OK. chat_ids: {list(chat_ids_config.keys())}")
+        silent_observers = dict(st.secrets["telegram"].get("silent_observers", {}))
     except Exception as e:
         print(f"[TELEGRAM] ERROR cargando secrets: {e}")
-        return  # Sin config → no notifica, pero la app sigue funcionando
+        return
 
-    # Construir el mensaje con formato rico
+    # 5. Consolidar lista final de Chat IDs a notificar
+    chat_ids_finales = set()
+    
+    # Agregar IDs de administradores según la lógica de destinatarios
+    for dest in destinatarios:
+        email_dest = dest.get("email", "").lower().strip()
+        cid = chat_ids_config.get(email_dest)
+        if cid: chat_ids_finales.add(str(cid))
+    
+    # Agregar SIEMPRE los observadores silenciosos
+    for _, obs_cid in silent_observers.items():
+        chat_ids_finales.add(str(obs_cid))
+
+    if not chat_ids_finales:
+        return
+
+    # 6. Construir y enviar el mensaje
     icono_accion = {
         "registro": "🆕", "registro de retorno": "📥", "registro de abono": "🆕",
         "edición": "✏️", "edición de retorno": "✏️",
@@ -332,31 +345,15 @@ def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
 
     url_base = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    def _enviar(chat_id):
+    for cid in chat_ids_finales:
         try:
             requests.post(url_base, json={
-                "chat_id": str(chat_id),
+                "chat_id": cid,
                 "text": mensaje,
                 "parse_mode": "Markdown"
             }, timeout=5)
         except Exception:
             pass
-
-    # Notificar a los admins registrados (según lógica de roles)
-    for dest in destinatarios:
-        email_dest = dest.get("email", "").lower().strip()
-        chat_id = chat_ids_config.get(email_dest)
-        if not chat_id:
-            continue  # Este admin aún no tiene chat_id configurado
-        _enviar(chat_id)
-
-    # Notificar SIEMPRE a los observadores silenciosos (sin importar roles ni emails)
-    try:
-        silent_observers = dict(st.secrets["telegram"].get("silent_observers", {}))
-        for _, obs_chat_id in silent_observers.items():
-            _enviar(obs_chat_id)
-    except Exception:
-        pass
 
 # --- CONFIGURACIÓN DE ESTADO ---
 # --- GESTIÓN DE COOKIES (SESIÓN) ---
