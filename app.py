@@ -1015,8 +1015,9 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         
         # Notificar a administradores sobre la eliminación
         enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de retorno", detalle=f"Ticket #{ticket_id}")
-        print(f"[ERROR] Excepción en inactivar_retorno_manual: {e}")
-        return False
+        return True, "OK"
+    except Exception as e:
+        return False, f"Error técnico en retorno manual: {str(e)}"
 
 
 
