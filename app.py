@@ -924,15 +924,14 @@ def actualizar_retorno_manual(ticket_id, monto):
 # --- FUNCIONES DE INACTIVACIÓN (Soft Delete) ---
 
 def inactivar_pago(ticket_id, usuario_nombre):
-    """Marca un abono como Inactivo en Google Sheets y registra en auditoría."""
+    """Marca un abono como Inactivo y devuelve (éxito, mensaje)"""
     try:
         data = sheet.get_all_values()
-        if not data: return False
+        if not data: return False, "La hoja está vacía."
         
-        # Estandarizar búsqueda de encabezados
+        headers = data[0]
         header_map = {h.lower().strip(): i for i, h in enumerate(headers)}
         
-        # Buscar índice de Ticket (flexible)
         idx_t = -1
         for variant in ["ticket", "tiket", "id"]:
             if variant in header_map:
@@ -940,17 +939,14 @@ def inactivar_pago(ticket_id, usuario_nombre):
                 break
         
         if idx_t == -1:
-            print(f"[ERROR] No se encontró columna de Ticket (variantes probadas: ticket, tiket)")
-            return False
+            return False, f"Columna 'Ticket' no encontrada. Encabezados detectados: {headers}"
             
-        # Buscar índice de Estado (flexible)
         idx_status = -1
         for variant in ["estado", "estatus", "status", "true/false"]:
             if variant in header_map:
                 idx_status = header_map[variant]
                 break
         
-        # Crear columna de Estado si no existe
         if idx_status == -1:
             sheet.update_cell(1, len(headers) + 1, "Estado")
             idx_status = len(headers)
@@ -961,26 +957,23 @@ def inactivar_pago(ticket_id, usuario_nombre):
                 row_found = i; break
         
         if row_found == -1:
-            print(f"[ERROR] Ticket #{ticket_id} no encontrado para inactivar")
-            return False
+            return False, f"Ticket #{ticket_id} no encontrado en la hoja."
             
         sheet.update_cell(row_found, idx_status + 1, "Inactivo")
         
         fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Inactivación", "Activo", "Inactivo"])
         
-        # Notificar a administradores sobre la eliminación
         enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de abono", detalle=f"Ticket #{ticket_id}")
-        return True
+        return True, "OK"
     except Exception as e:
-        print(f"[ERROR] Excepción en inactivar_pago: {e}")
-        return False
+        return False, f"Error técnico: {str(e)}"
 
 def inactivar_retorno_manual(ticket_id, usuario_nombre):
-    """Marca un retorno manual como Inactivo en Google Sheets y registra en auditoría."""
+    """Marca un retorno manual como Inactivo y devuelve (éxito, mensaje)"""
     try:
         data = sheet_retorno_manual.get_all_values()
-        if not data: return False
+        if not data: return False, "La hoja está vacía."
         
         headers = [h.strip() for h in data[0]]
         
@@ -994,9 +987,7 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
                 idx_t = header_map[variant]
                 break
         
-        if idx_t == -1:
-            print(f"[ERROR] No se encontró columna de Ticket en retorno manual")
-            return False
+        if idx_t == -1: return False, f"Columna 'Ticket' no encontrada en Retorno Manual."
             
         # Buscar índice de Estado (flexible)
         idx_status = -1
@@ -1014,9 +1005,7 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
             if len(row) > idx_t and str(row[idx_t]).strip() == str(ticket_id).strip():
                 row_found = i; break
         
-        if row_found == -1:
-            print(f"[ERROR] Ticket #{ticket_id} no encontrado en retorno manual")
-            return False
+        if row_found == -1: return False, f"Ticket #{ticket_id} no encontrado."
             
         sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Inactivo")
         
@@ -1026,8 +1015,6 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         
         # Notificar a administradores sobre la eliminación
         enviar_notificacion_telegram(ticket_id, 0, accion="eliminación de retorno", detalle=f"Ticket #{ticket_id}")
-        return True
-    except Exception as e:
         print(f"[ERROR] Excepción en inactivar_retorno_manual: {e}")
         return False
 
@@ -1595,13 +1582,14 @@ if is_editor:
                                         if st.button("🗑️", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
-                                                if inactivar_pago(t_id, nombre_u):
+                                                exito, msj = inactivar_pago(t_id, nombre_u)
+                                                if exito:
                                                     st.success("✅ Registro inactivado correctamente.")
                                                     obtener_datos.clear()
                                                     time.sleep(1)
                                                     st.rerun()
                                                 else:
-                                                    st.error("❌ Error al inactivar.")
+                                                    st.error(f"❌ {msj}")
                                     else:
                                         st.warning("⚠️ Este registro ya se encuentra INACTIVO.")
 
@@ -1740,13 +1728,14 @@ if is_editor or is_factura:
                                         if st.button("🗑️", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
-                                                if inactivar_retorno_manual(tm_id, nombre_u):
+                                                exito, msj = inactivar_retorno_manual(tm_id, nombre_u)
+                                                if exito:
                                                     st.success("✅ Retorno inactivado correctamente.")
                                                     obtener_datos_retorno_manual.clear()
                                                     time.sleep(1)
                                                     st.rerun()
                                                 else:
-                                                    st.error("❌ Error al inactivar.")
+                                                    st.error(f"❌ {msj}")
                                     else:
                                         st.warning("⚠️ Este retorno ya se encuentra INACTIVO.")
 
