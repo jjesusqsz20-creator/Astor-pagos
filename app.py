@@ -289,12 +289,9 @@ def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
     todos_admins = [u for u in todos_usuarios if u.get("rol") == "Administrador"]
 
     # Lógica de destinatarios:
-    # - Colaborador → notifica a TODOS los admins
-    # - Admin       → notifica solo al OTRO admin (no a sí mismo)
-    if rol_actual == "Colaborador":
-        destinatarios = todos_admins
-    else:
-        destinatarios = [u for u in todos_admins if u.get("email", "").lower().strip() != email_actual]
+    # Ahora enviamos a TODOS los administradores siempre, 
+    # incluyendo al que realiza la acción para que tenga su confirmación.
+    destinatarios = todos_admins
 
     # 4. Leer token y configuraciones de Telegram
     try:
