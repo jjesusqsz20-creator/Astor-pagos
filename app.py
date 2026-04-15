@@ -1531,6 +1531,7 @@ if is_editor:
                 else:
                     for idx, row in df_filtrado.iterrows():
                         t_id = str(row.get('Ticket', '---'))
+                        es_inactivo = row.get('Estado') == 'Inactivo'
                         # Definir colores según estado
                         color_texto = "#94a3b8" if es_inactivo else "#1e293b"
                         color_monto = "#94a3b8" if es_inactivo else "#1e3a8a"
@@ -1700,6 +1701,7 @@ if is_editor or is_factura:
                 else:
                     for idx, row in df_m_filtrado.iterrows():
                         tm_id = str(row.get('Ticket', '---'))
+                        es_inactivo_m = row.get('Estado') == 'Inactivo'
                         # Colores condicionales para Retorno Manual
                         c_m_texto = "#94a3b8" if es_inactivo_m else "#1e293b"
                         m_m_opacidad = "0.6" if es_inactivo_m else "1.0"
