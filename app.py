@@ -1531,23 +1531,22 @@ if is_editor:
                 else:
                     for idx, row in df_filtrado.iterrows():
                         t_id = str(row.get('Ticket', '---'))
-                        es_inactivo = row.get('Estado') == 'Inactivo'
+                        # Definir colores según estado
+                        color_texto = "#94a3b8" if es_inactivo else "#1e293b"
+                        color_monto = "#94a3b8" if es_inactivo else "#1e3a8a"
+                        opacidad = "0.6" if es_inactivo else "1.0"
                         
                         # Contenedor con borde para cada ticket
                         with st.container(border=True):
-                            if es_inactivo:
-                                st.markdown("""
-                                    <style>
-                                        div[data-testid="stVerticalBlock"] > div:has(div.stExpander) {
-                                            opacity: 0.6;
-                                            filter: grayscale(100%);
-                                        }
-                                    </style>
-                                """, unsafe_allow_html=True)
-                            
                             c_tk, c_f, c_c, c_p, c_m, c_u = st.columns(COL_PESOS)
                             with c_tk:
-                                with st.popover(f"🎫 {t_id}", use_container_width=True):
+                                label_btn = f"✖️ {t_id}" if es_inactivo else f"🎫 {t_id}"
+                                with st.popover(label_btn, use_container_width=True):
+                                    if es_inactivo:
+                                        st.warning("⚠️ ESTE REGISTRO ESTÁ INACTIVO")
+                                        st.write("Fue anulado y no suma a los saldos totales.")
+                                        st.divider()
+                                    
                                     # Seccion de Edicion
                                     st.markdown("##### ✏️ Editar Registro")
                                     nueva_cta = st.selectbox("Cambiar Cuenta", CUENTAS, index=CUENTAS.index(row['Cuenta']) if row['Cuenta'] in CUENTAS else 0, key=f"edit_cta_{t_id}")
@@ -1594,11 +1593,11 @@ if is_editor:
                                     else:
                                         st.warning("⚠️ Este registro ya se encuentra INACTIVO.")
 
-                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_c.markdown(f"<p style='text-align: center; margin: 0; display: block;'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 <b>${float(row.get('Monto Total', 0)):,.2f}</b></p>", unsafe_allow_html=True)
-                            c_u.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_c.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>👤 {row.get('Proveedor', '---')}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_monto};'>💰 <b>${float(row.get('Monto Total', 0)):,.2f}</b></p>", unsafe_allow_html=True)
+                            c_u.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>👨‍💻 {row.get('Registrado por', '---')}</p>", unsafe_allow_html=True)
 
 # 3. RETORNO PAGADO
 
@@ -1701,16 +1700,19 @@ if is_editor or is_factura:
                 else:
                     for idx, row in df_m_filtrado.iterrows():
                         tm_id = str(row.get('Ticket', '---'))
-                        es_inactivo_m = row.get('Estado') == 'Inactivo'
+                        # Colores condicionales para Retorno Manual
+                        c_m_texto = "#94a3b8" if es_inactivo_m else "#1e293b"
+                        m_m_opacidad = "0.6" if es_inactivo_m else "1.0"
                         
                         with st.container(border=True):
-                            if es_inactivo_m:
-                                # Aplicar filtro visual similar
-                                pass 
-                            
                             c_tk, c_f, c_p, c_m = st.columns(CM_PESOS)
                             with c_tk:
-                                with st.popover(f"🎫 {tm_id}", use_container_width=True):
+                                label_m = f"✖️ {tm_id}" if es_inactivo_m else f"🎫 {tm_id}"
+                                with st.popover(label_m, use_container_width=True):
+                                    if es_inactivo_m:
+                                        st.warning("⚠️ RETORNO INACTIVO")
+                                        st.divider()
+                                    
                                     st.markdown("##### ✏️ Editar Retorno Manual")
                                     st.info(f"Ticket: {tm_id}")
                                     
@@ -1740,9 +1742,9 @@ if is_editor or is_factura:
                                     else:
                                         st.warning("⚠️ Este retorno ya se encuentra INACTIVO.")
 
-                            c_f.markdown(f"<p style='text-align: center; margin: 0; display: block;'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
-                            c_p.markdown(f"<p style='text-align: center; margin: 0; display: block;'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
-                            c_m.markdown(f"<p style='text-align: center; margin: 0; display: block;'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.2f}</p>", unsafe_allow_html=True)
+                            c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
+                            c_p.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
+                            c_m.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>💰 ${pd.to_numeric(row.get('Monto Total', 0), errors='coerce'):,.2f}</p>", unsafe_allow_html=True)
 
 
 
