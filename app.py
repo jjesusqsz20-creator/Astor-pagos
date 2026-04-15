@@ -303,7 +303,9 @@ def enviar_notificacion_telegram(ticket, monto, accion="registro", detalle=""):
     try:
         token = st.secrets["telegram"]["token"]
         chat_ids_config = dict(st.secrets["telegram"].get("chat_ids", {}))
-    except Exception:
+        print(f"[TELEGRAM] Token cargado OK. chat_ids: {list(chat_ids_config.keys())}")
+    except Exception as e:
+        print(f"[TELEGRAM] ERROR cargando secrets: {e}")
         return  # Sin config → no notifica, pero la app sigue funcionando
 
     # Construir el mensaje con formato rico
