@@ -1640,11 +1640,14 @@ if is_editor:
                 else:
                     for idx, row in df_filtrado.iterrows():
                         t_id = str(row.get('Ticket', '---'))
-                        es_inactivo = row.get('Estado') == 'Inactivo'
+                        # Deteccion ultra-robusta de estado inactivo
+                        val_estado = str(row.get('Estado', 'Activo')).strip().lower()
+                        es_inactivo = val_estado in ['inactivo', 'false', '0', 'no', 'anulado']
+                        
                         # Definir colores según estado
                         color_texto = "#94a3b8" if es_inactivo else "#1e293b"
                         color_monto = "#94a3b8" if es_inactivo else "#1e3a8a"
-                        opacidad = "0.6" if es_inactivo else "1.0"
+                        opacidad = "0.4" if es_inactivo else "1.0"
                         
                         # Contenedor con borde para cada ticket
                         with st.container(border=True):
@@ -1700,12 +1703,12 @@ if is_editor:
                                     
                                     st.divider()
                                     if not es_inactivo:
-                                        if st.button("🗑️ Inactivar Ticket", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
-                                            with st.spinner("Inactivando..."):
+                                        if st.button("🗑️ Desactivar Ticket", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
+                                            with st.spinner("Desactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 exito, msj = inactivar_pago(t_id, nombre_u)
                                                 if exito:
-                                                    st.success("✅ Registro inactivado correctamente.")
+                                                    st.success("✅ Registro desactivado correctamente.")
                                                     st.cache_data.clear()
                                                     time.sleep(1)
                                                     st.rerun()
@@ -1713,7 +1716,7 @@ if is_editor:
                                                     st.error(f"❌ {msj}")
 
                             # Mostrar Badge de estado justo despues del popover
-                            lbl_status = "🟢 ACTIVO" if not es_inactivo else "⚪ INACTIVO"
+                            lbl_status = "🟢 ACTIVO" if not es_inactivo else "⚪ DESACTIVADO"
                             c_tk.markdown(f"<p style='text-align: center; margin-top: -10px; font-size: 0.65rem; font-weight: bold;'>{lbl_status}</p>", unsafe_allow_html=True)
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
@@ -1823,10 +1826,13 @@ if is_editor or is_factura:
                 else:
                     for idx, row in df_m_filtrado.iterrows():
                         tm_id = str(row.get('Ticket', '---'))
-                        es_inactivo_m = row.get('Estado') == 'Inactivo'
+                        # Deteccion ultra-robusta para retorno manual
+                        val_estado_m = str(row.get('Estado', 'Activo')).strip().lower()
+                        es_inactivo_m = val_estado_m in ['inactivo', 'false', '0', 'no', 'anulado']
+                        
                         # Colores condicionales para Retorno Manual
                         c_m_texto = "#94a3b8" if es_inactivo_m else "#1e293b"
-                        m_m_opacidad = "0.6" if es_inactivo_m else "1.0"
+                        m_m_opacidad = "0.4" if es_inactivo_m else "1.0"
                         
                         with st.container(border=True):
                             c_tk, c_f, c_p, c_m = st.columns(CM_PESOS)
@@ -1834,7 +1840,7 @@ if is_editor or is_factura:
                                 label_m = f"✖️ {tm_id}" if es_inactivo_m else f"🎫 {tm_id}"
                                 with st.popover(label_m, use_container_width=True):
                                     if es_inactivo_m:
-                                        st.error("⚪ RETORNO INACTIVO")
+                                        st.error("⚪ RETORNO DESACTIVADO")
                                         if st.button("🔄 Reactivar Retorno", key=f"btn_react_m_{tm_id}", use_container_width=True, type="primary"):
                                             with st.spinner("Reactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
@@ -1863,12 +1869,12 @@ if is_editor or is_factura:
                                     
                                     st.divider()
                                     if not es_inactivo_m:
-                                        if st.button("🗑️ Inactivar Retorno", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
-                                            with st.spinner("Inactivando..."):
+                                        if st.button("🗑️ Desactivar Retorno", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
+                                            with st.spinner("Desactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 exito, msj = inactivar_retorno_manual(tm_id, nombre_u)
                                                 if exito:
-                                                    st.success("✅ Retorno inactivado correctamente.")
+                                                    st.success("✅ Retorno desactivado correctamente.")
                                                     st.cache_data.clear()
                                                     time.sleep(1)
                                                     st.rerun()
@@ -1876,7 +1882,7 @@ if is_editor or is_factura:
                                                     st.error(f"❌ {msj}")
 
                             # Badge de estado para retorno
-                            m_status = "🟢 ACTIVO" if not es_inactivo_m else "⚪ INACTIVO"
+                            m_status = "🟢 ACTIVO" if not es_inactivo_m else "⚪ DESACTIVADO"
                             c_tk.markdown(f"<p style='text-align: center; margin-top: -10px; font-size: 0.65rem; font-weight: bold;'>{m_status}</p>", unsafe_allow_html=True)
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
