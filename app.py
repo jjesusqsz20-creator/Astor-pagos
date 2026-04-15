@@ -969,6 +969,43 @@ def inactivar_pago(ticket_id, usuario_nombre):
     except Exception as e:
         return False, f"Error técnico: {str(e)}"
 
+def reactivar_pago(ticket_id, usuario_nombre):
+    """Marca un abono como Activo y devuelve (éxito, mensaje)"""
+    try:
+        data = sheet.get_all_values()
+        headers = data[0]
+        header_map = {h.lower().strip(): i for i, h in enumerate(headers)}
+        
+        idx_t = -1
+        for variant in ["ticket", "tiket"]:
+            if variant in header_map:
+                idx_t = header_map[variant]
+                break
+        
+        idx_status = -1
+        for variant in ["estado", "estatus", "status", "true/false"]:
+            if variant in header_map:
+                idx_status = header_map[variant]
+                break
+        
+        if idx_t == -1 or idx_status == -1: return False, "Columnas no encontradas."
+        
+        row_found = -1
+        for i, row in enumerate(data[1:], 2):
+            if len(row) > idx_t and str(row[idx_t]).strip() == str(ticket_id).strip():
+                row_found = i; break
+        
+        if row_found == -1: return False, "Ticket no encontrado."
+            
+        sheet.update_cell(row_found, idx_status + 1, "Activo")
+        
+        fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_audit.append_row([fecha_act, usuario_nombre, ticket_id, "---", "Reactivación", "Inactivo", "Activo"])
+        
+        return True, "OK"
+    except Exception as e:
+        return False, f"Error: {e}"
+
 def inactivar_retorno_manual(ticket_id, usuario_nombre):
     """Marca un retorno manual como Inactivo y devuelve (éxito, mensaje)"""
     try:
@@ -1018,6 +1055,43 @@ def inactivar_retorno_manual(ticket_id, usuario_nombre):
         return True, "OK"
     except Exception as e:
         return False, f"Error técnico en retorno manual: {str(e)}"
+
+def reactivar_retorno_manual(ticket_id, usuario_nombre):
+    """Marca un retorno manual como Activo y devuelve (éxito, mensaje)"""
+    try:
+        data = sheet_retorno_manual.get_all_values()
+        headers = data[0]
+        header_map = {h.lower().strip(): i for i, h in enumerate(headers)}
+        
+        idx_t = -1
+        for variant in ["ticket", "tiket"]:
+            if variant in header_map:
+                idx_t = header_map[variant]
+                break
+        
+        idx_status = -1
+        for variant in ["estado", "estatus", "status", "true/false"]:
+            if variant in header_map:
+                idx_status = header_map[variant]
+                break
+        
+        if idx_t == -1 or idx_status == -1: return False, "Estructura no compatible."
+        
+        row_found = -1
+        for i, row in enumerate(data[1:], 2):
+            if len(row) > idx_t and str(row[idx_t]).strip() == str(ticket_id).strip():
+                row_found = i; break
+        
+        if row_found == -1: return False, "No se encontró el Ticket."
+            
+        sheet_retorno_manual.update_cell(row_found, idx_status + 1, "Activo")
+        
+        fecha_act = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet_audit.append_row([fecha_act, usuario_nombre, "---", ticket_id, "Reactivación", "Inactivo", "Activo"])
+        
+        return True, "OK"
+    except Exception as e:
+        return False, f"Error: {e}"
 
 
 
@@ -1252,6 +1326,14 @@ if is_editor or is_factura:
     df_gl_abono = filtrar_por_periodo(obtener_datos(), m_sel, a_sel)
     df_gl_retorno = filtrar_por_periodo(obtener_datos_retorno(), m_sel, a_sel)
     df_gl_manual = filtrar_por_periodo(obtener_datos_retorno_manual(), m_sel, a_sel)
+    
+    # --- FILTRADO DE SALDOS REALES (Solo Activos) ---
+    if not df_gl_abono.empty:
+        df_gl_abono = df_gl_abono[df_gl_abono["Estado"] != "Inactivo"]
+    if not df_gl_retorno.empty:
+        df_gl_retorno = df_gl_retorno[df_gl_retorno["Estado"] != "Inactivo"]
+    if not df_gl_manual.empty:
+        df_gl_manual = df_gl_manual[df_gl_manual["Estado"] != "Inactivo"]
 else:
     df_gl_abono = pd.DataFrame()
     df_gl_retorno = pd.DataFrame()
@@ -1544,8 +1626,19 @@ if is_editor:
                                 label_btn = f"✖️ {t_id}" if es_inactivo else f"🎫 {t_id}"
                                 with st.popover(label_btn, use_container_width=True):
                                     if es_inactivo:
-                                        st.warning("⚠️ ESTE REGISTRO ESTÁ INACTIVO")
-                                        st.write("Fue anulado y no suma a los saldos totales.")
+                                        st.error("⚪ ESTE REGISTRO ESTÁ INACTIVO")
+                                        st.write("No suma a saldos totales ni comisiones.")
+                                        if st.button("🔄 Reactivar Registro", key=f"btn_react_{t_id}", use_container_width=True, type="primary"):
+                                            with st.spinner("Reactivando..."):
+                                                nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
+                                                exito, msj = reactivar_pago(t_id, nombre_u)
+                                                if exito:
+                                                    st.success("✅ Registro reactivado.")
+                                                    st.cache_data.clear()
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                else:
+                                                    st.error(f"❌ {msj}")
                                         st.divider()
                                     
                                     # Seccion de Edicion
@@ -1580,19 +1673,21 @@ if is_editor:
                                     
                                     st.divider()
                                     if not es_inactivo:
-                                        if st.button("🗑️", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
+                                        if st.button("🗑️ Inactivar Ticket", key=f"btn_inact_{t_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 exito, msj = inactivar_pago(t_id, nombre_u)
                                                 if exito:
                                                     st.success("✅ Registro inactivado correctamente.")
-                                                    obtener_datos.clear()
+                                                    st.cache_data.clear()
                                                     time.sleep(1)
                                                     st.rerun()
                                                 else:
                                                     st.error(f"❌ {msj}")
-                                    else:
-                                        st.warning("⚠️ Este registro ya se encuentra INACTIVO.")
+
+                            # Mostrar Badge de estado justo despues del popover
+                            lbl_status = "🟢 ACTIVO" if not es_inactivo else "⚪ INACTIVO"
+                            c_tk.markdown(f"<p style='text-align: center; margin-top: -10px; font-size: 0.65rem; font-weight: bold;'>{lbl_status}</p>", unsafe_allow_html=True)
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>📅 {row['Fecha'].split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_c.markdown(f"<p style='text-align: center; margin: 0; opacity: {opacidad}; color: {color_texto};'>🏦 {row['Cuenta']}</p>", unsafe_allow_html=True)
@@ -1712,7 +1807,18 @@ if is_editor or is_factura:
                                 label_m = f"✖️ {tm_id}" if es_inactivo_m else f"🎫 {tm_id}"
                                 with st.popover(label_m, use_container_width=True):
                                     if es_inactivo_m:
-                                        st.warning("⚠️ RETORNO INACTIVO")
+                                        st.error("⚪ RETORNO INACTIVO")
+                                        if st.button("🔄 Reactivar Retorno", key=f"btn_react_m_{tm_id}", use_container_width=True, type="primary"):
+                                            with st.spinner("Reactivando..."):
+                                                nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
+                                                exito, msj = reactivar_retorno_manual(tm_id, nombre_u)
+                                                if exito:
+                                                    st.success("✅ Retorno reactivado.")
+                                                    st.cache_data.clear()
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                else:
+                                                    st.error(f"❌ {msj}")
                                         st.divider()
                                     
                                     st.markdown("##### ✏️ Editar Retorno Manual")
@@ -1730,19 +1836,21 @@ if is_editor or is_factura:
                                     
                                     st.divider()
                                     if not es_inactivo_m:
-                                        if st.button("🗑️", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
+                                        if st.button("🗑️ Inactivar Retorno", key=f"btn_inact_m_{tm_id}", use_container_width=True, type="secondary"):
                                             with st.spinner("Inactivando..."):
                                                 nombre_u = st.session_state.usuario_logueado['nombre'] if st.session_state.usuario_logueado else "Usuario"
                                                 exito, msj = inactivar_retorno_manual(tm_id, nombre_u)
                                                 if exito:
                                                     st.success("✅ Retorno inactivado correctamente.")
-                                                    obtener_datos_retorno_manual.clear()
+                                                    st.cache_data.clear()
                                                     time.sleep(1)
                                                     st.rerun()
                                                 else:
                                                     st.error(f"❌ {msj}")
-                                    else:
-                                        st.warning("⚠️ Este retorno ya se encuentra INACTIVO.")
+
+                            # Badge de estado para retorno
+                            m_status = "🟢 ACTIVO" if not es_inactivo_m else "⚪ INACTIVO"
+                            c_tk.markdown(f"<p style='text-align: center; margin-top: -10px; font-size: 0.65rem; font-weight: bold;'>{m_status}</p>", unsafe_allow_html=True)
 
                             c_f.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>📅 {str(row['Fecha']).split(' ')[0]}</p>", unsafe_allow_html=True)
                             c_p.markdown(f"<p style='text-align: center; margin: 0; opacity: {m_m_opacidad}; color: {c_m_texto};'>👤 {row['Nombre']}</p>", unsafe_allow_html=True)
